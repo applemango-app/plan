@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>애플망고 평가계획 변환기</title>
+<meta name="description" content="학교 한글 평가계획(hwp, hwpx)을 애플망고 앱에 올릴 엑셀로 바꿔요. 파일은 이 브라우저 밖으로 나가지 않아요.">
+<style>
+  :root {
+    --bg: #FBF6F0; --card: #FFFFFF; --primary: #FF8A3D; --primary-dark: #E8691E; --primary-soft: #FFE7D2;
+    --text: #2B2118; --muted: #8C8074; --border: #F1E7DB; --accent: #57B06B; --danger: #E5484D;
+    --yellow: #FFF2CC; --red: #F8CBAD;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; line-height: 1.55; }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 64px; }
+  header h1 { font-size: 26px; margin: 0 0 6px; }
+  header h1 span { color: var(--primary-dark); }
+  header p { margin: 0; color: var(--muted); }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 22px 0; padding: 0; list-style: none; counter-reset: s; }
+  .steps li { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; font-size: 14px; counter-increment: s; }
+  .steps li::before { content: counter(s); display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 6px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 700; font-size: 12px; }
+  #drop { display: block; border: 2px dashed var(--primary); border-radius: 18px; background: var(--card); padding: 34px 16px; text-align: center; cursor: pointer; transition: background .15s; }
+  #drop.over, #drop:hover { background: var(--primary-soft); }
+  #drop strong { display: block; font-size: 18px; margin-bottom: 4px; }
+  #drop input { display: none; }
+  .privacy { margin: 10px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+  #results { margin-top: 26px; display: grid; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 18px; box-shadow: 0 4px 12px rgba(58,42,24,.06); }
+  .card h3 { margin: 0 0 4px; font-size: 16px; word-break: break-all; }
+  .meta { margin: 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; margin: 2px 0 10px; }
+  .bad { color: var(--danger); font-weight: 600; }
+  .warn { color: #B26A00; font-size: 13px; margin-top: 2px; }
+  .ok { color: var(--accent); font-size: 13px; margin-top: 2px; }
+  .book { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; }
+  .book-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  button.primary { flex: none; border: 0; border-radius: 999px; background: var(--primary); color: #fff; font: inherit; font-weight: 700; padding: 9px 18px; cursor: pointer; }
+  button.primary:hover { background: var(--primary-dark); }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--primary-dark); font-size: 14px; }
+  .table-wrap { overflow-x: auto; margin-top: 8px; }
+  table { border-collapse: collapse; font-size: 12.5px; min-width: 640px; width: 100%; }
+  th, td { border: 1px solid var(--border); padding: 5px 7px; vertical-align: top; text-align: left; }
+  th { background: #F7EFE6; white-space: nowrap; }
+  td:nth-child(6), td:nth-child(7), th:nth-child(6), th:nth-child(7) { white-space: nowrap; }
+  td.yellow { background: var(--yellow); }
+  td.red { background: var(--red); }
+  .legend { font-size: 13px; color: var(--muted); margin-top: 28px; }
+  .legend span { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+  footer { margin-top: 36px; font-size: 12.5px; color: var(--muted); }
+  footer a { color: var(--primary-dark); font-weight: 600; }
+  @media (max-width: 600px) {
+    .steps { grid-template-columns: 1fr; }
+    .book-head { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1><span>애플망고</span> 평가계획 변환기</h1>
+    <p>학교 한글 평가계획을 애플망고 앱에 바로 올릴 수 있는 엑셀로 바꿔요.</p>
+  </header>
+
+  <ol class="steps">
+    <li>학교 평가계획 한글 파일(hwp, hwpx)을 올려요</li>
+    <li>학년별 엑셀을 받고, 노란·빨간 칸만 확인해요</li>
+    <li>앱 평가계획 메뉴의 <b>엑셀로 불러오기</b>로 올려요</li>
+  </ol>
+
+  <label id="drop">
+    <input id="file" type="file" accept=".hwp,.hwpx" multiple>
+    <strong>한글 파일을 여기로 끌어 놓거나 눌러서 고르세요</strong>
+    <span class="muted">초등·중학교 평가계획 (여러 개를 한꺼번에 올려도 돼요)</span>
+  </label>
+  <p class="privacy">🔒 파일은 이 브라우저 안에서만 변환돼요. 어디로도 전송되거나 저장되지 않아요.</p>
+
+  <div id="results"></div>
+
+  <p class="legend">
+    <span style="background:var(--yellow)"></span>원문에 없어서 규칙으로 채운 칸(확인 필요) &nbsp;
+    <span style="background:var(--red)"></span>원문에 없는 칸(채워야 불러올 수 있어요)
+  </p>
+  <footer>
+    <a href="https://play.google.com/store/apps/details?id=com.applemango.teacher" target="_blank" rel="noopener">애플망고 앱 받기 (Google Play)</a><br>
+    PDF는 아직 변환하지 못해요. 한글 원본 파일을 올려 주세요. 평가 방침만 담긴 학교 전체 요약 파일보다 과목별 수행평가 표가 있는 파일이 잘 변환돼요.
+  </footer>
+</main>
+<script src="bundle.js"></script>
+</body>
+</html>
