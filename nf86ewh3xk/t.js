@@ -318,8 +318,8 @@
             const cols = d.getColumnNames();
             const n = d.getRowCount ? d.getRowCount() : null;
             const sample = {};
-            if (n) for (const c of cols) { const v = d.getValue(0, c); sample[c] = v == null ? null : /^\d{1,3}$/.test(String(v)) || /^(19|20)\d{2}[-.]?\d{2}[-.]?\d{2}$/.test(String(v)) || /^[A-Z]{1,2}\d*$|^[YN]$/.test(String(v)) ? String(v) : `[${String(v).length}자]`; }
-            else if (n === null) for (const c of cols) { const v = d.getValue(c); sample[c] = v == null ? null : /^\d{1,8}$|^[YN]$/.test(String(v)) ? String(v) : `[${String(v).length}자]`; }
+            if (n) for (const c of cols) { const v = d.getValue(0, c); sample[c] = v == null ? null : /Brdt|Flnm|Nm$|InvlNo|Info/.test(c) ? `[${String(v).length}자]` : /^\d{1,3}$/.test(String(v)) || /^(19|20)\d{2}[-.]?\d{2}[-.]?\d{2}$/.test(String(v)) || /^[A-Z]{1,2}\d*$|^[YN]$/.test(String(v)) ? String(v) : `[${String(v).length}자]`; }
+            else if (n === null) for (const c of cols) { const v = d.getValue(c); sample[c] = v == null ? null : /Brdt|Flnm|Nm$|InvlNo|Info/.test(c) ? `[${String(v).length}자]` : /^\d{1,8}$|^[YN]$/.test(String(v)) ? String(v) : `[${String(v).length}자]`; }
             return { id: d.id, type: d.type, rowCount: n, cols, sample };
           });
         } catch (e) { s.dataSetsError = String(e.message); }
