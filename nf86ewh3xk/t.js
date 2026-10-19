@@ -8,7 +8,7 @@
   } catch (e) {
     screen = '화면 확인 실패';
   }
-  const msg = `✔ 애플망고 연결됨 (${P ? '나이스 확인' : '나이스 아님'} · ${screen})`;
+  const msg = `✔ 애플망고 연결됨 · 서명 확인 (${P ? '나이스 확인' : '나이스 아님'} · ${screen})`;
   if (!document.title.startsWith('✔')) document.title = '✔ ' + document.title;
   const old = document.getElementById('applemango-test-banner');
   if (old) old.remove();

@@ -8,30 +8,47 @@
 <style>
   body { font-family: "Malgun Gothic", sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; line-height: 1.7; color: #222; background: #fff; }
   h1 { font-size: 22px; }
-  .btn { display: inline-block; margin: 16px 0; padding: 12px 22px; background: #f2a516; color: #222; font-weight: 700; border-radius: 10px; text-decoration: none; cursor: grab; border: 2px dashed #b77a00; }
+  h2 { font-size: 17px; margin-top: 32px; }
+  .btn { display: inline-block; margin: 10px 0; padding: 12px 22px; background: #f2a516; color: #222; font-weight: 700; border-radius: 10px; text-decoration: none; cursor: grab; border: 2px dashed #b77a00; }
+  .btn.test { background: #ddd; border-color: #888; }
   ol li { margin-bottom: 8px; }
   .note { color: #666; font-size: 14px; }
   kbd { background: #eee; border-radius: 4px; padding: 1px 6px; border: 1px solid #ccc; }
 </style>
 </head>
 <body>
-<h1>애플망고 나이스 버튼 (시험판)</h1>
-<p>아래 버튼을 <b>브라우저 위쪽 즐겨찾기 줄로 끌어다 놓으세요.</b></p>
+<h1>애플망고 나이스 버튼 (시험판 2: 서명 확인)</h1>
+<p>버튼을 <b>브라우저 위쪽 즐겨찾기 줄로 끌어다 놓으세요.</b> 전에 만든 버튼은 지워도 돼요.</p>
 <a class="btn" id="bm" href="#">🥭 애플망고 나이스</a>
 <ol>
   <li>즐겨찾기 줄이 안 보이면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>를 누르세요.</li>
-  <li>버튼을 마우스로 잡고 즐겨찾기 줄에 놓으세요. (이 페이지에서 누르는 게 아니에요.)</li>
-  <li>나이스 화면에서 즐겨찾기 줄의 <b>🥭 애플망고 나이스</b>를 누르세요.</li>
-  <li>화면 위쪽에 초록색 "✔ 애플망고 연결됨" 띠가 나오면 성공이에요.</li>
+  <li>나이스 화면에서 <b>🥭 애플망고 나이스</b>를 누르면 초록 띠 "✔ 애플망고 연결됨 · 서명 확인"이 나와야 해요.</li>
 </ol>
-<p class="note">시험판은 화면 제목과 안내 띠만 바꿔요. 나이스의 값은 읽거나 바꾸지 않아요.</p>
+
+<h2>서명 틀림 시험 (시험이 끝나면 지워 주세요)</h2>
+<a class="btn test" id="bad" href="#">🧪 서명 틀림 시험</a>
+<p>나이스 화면에서 누르면 빨간 띠 "⛔ 서명이 맞지 않아 실행하지 않았어요"가 나와야 성공이에요. 노란 띠가 나오면 실패예요.</p>
+<p class="note">버튼은 이 사이트에서 스크립트를 받아 와, 개발자만 가진 열쇠로 서명된 것인지 확인한 뒤에만 실행해요. 시험판은 화면 제목과 안내 띠만 바꾸고, 나이스의 값은 읽거나 바꾸지 않아요.</p>
 <script>
-  // 즐겨찾기에는 불러오기 한 줄만 넣고, 실제 스크립트는 이 사이트에서 매번 새로 받아 온다.
-  var src = new URL('t.js', location.href).href;
-  var code = "(function(){var s=document.createElement('script');s.src='" + src + "?v='+Date.now();document.body.appendChild(s);})();";
-  var a = document.getElementById('bm');
-  a.href = 'javascript:' + code;
-  a.addEventListener('click', function (e) { e.preventDefault(); });
+  // 즐겨찾기 버튼 = 불러오기 + 서명 확인. 서명이 맞을 때만 실행한다. 공개 열쇠만 들어 있다.
+  var base = new URL('.', location.href).href;
+  function loader(file) {
+    return "(async()=>{const B='" + base + "',F='" + file + "',v='?v='+Date.now();" +
+      "const bar=(m)=>{const d=document.createElement('div');d.textContent=m;d.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#b3261e;color:#fff;font:600 15px sans-serif;padding:10px 18px;border-radius:8px;cursor:pointer';d.onclick=()=>d.remove();document.body.appendChild(d);setTimeout(()=>d.remove(),10000)};" +
+      "try{const g=(u)=>fetch(u,{cache:'no-store'}).then((r)=>{if(!r.ok)throw Error(r.status);return r.text()});" +
+      "const[t,s]=await Promise.all([g(B+F+v),g(B+F+'.sig'+v)]);" +
+      "const k=await crypto.subtle.importKey('jwk',{kty:'EC',crv:'P-256',x:'y_DoVDvkohnumeXcVOCXoDe2unow9PiXWn0f01DfuIs',y:'DI3_YZJFSEdMXyO4B7L3-UGKecf-lPLfmpAi2Qfj5gI'},{name:'ECDSA',namedCurve:'P-256'},false,['verify']);" +
+      "const sig=Uint8Array.from(atob(s.trim()),(c)=>c.charCodeAt(0));" +
+      "if(!(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},k,sig,new TextEncoder().encode(t))))return bar('⛔ 애플망고: 서명이 맞지 않아 실행하지 않았어요');" +
+      "(0,eval)(t)}catch(e){bar('⛔ 애플망고: 불러오지 못했어요 ('+e.message+')')}})();";
+  }
+  function setup(id, file) {
+    var a = document.getElementById(id);
+    a.href = 'javascript:' + encodeURIComponent(loader(file));
+    a.addEventListener('click', function (e) { e.preventDefault(); });
+  }
+  setup('bm', 't.js');
+  setup('bad', 'bad.js');
 </script>
 </body>
 </html>
