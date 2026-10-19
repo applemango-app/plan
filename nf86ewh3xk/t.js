@@ -782,7 +782,7 @@ ${sv.err}
 
   // ---------- 시작: 화면 메뉴 (버튼은 늘 보이고, 지금 보고 있는 조회된 화면만 누를 수 있다) ----------
   const SCREENS = [
-    { re: /els_scres00_m02$/, ds: 'dsMain', grid: 'grdMain', label: '교과별 평가 (단계)', open: (a) => openPanel(a) },
+    { re: /els_scres00_m02$/, ds: 'dsMain', grid: 'grdMain', label: '교과별 평가 (단계)', path: '학급담임 › 성적 › 학생평가 › 교과평가 › 교과별 평가 › [조회]', open: (a) => openPanel(a) },
     { re: /els_scres10_m00$/, ds: 'dsMain', grid: 'grdMain', label: '학기말 종합의견 (과목별)', open: (a) => openTextPanel(a, 'subjText', '학기말 종합의견') },
     { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', grid: 'grdMain', label: '행동특성 및 종합의견', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
     { re: /els_sdlbg00_m01$/, ds: 'dsStu', grid: 'grdStu', dirtyDs: 'dsGicRecStu', label: '누가기록', open: (a) => openRecordPanel(a) },
@@ -799,9 +799,8 @@ ${sv.err}
       let rows = 0;
       try { if (a) rows = a.lookup(sc.ds).getRowCount(); } catch (_) {}
       let why = '';
-      if (!inst.length) why = '나이스에서 이 화면을 열고 [조회]를 눌러 주세요';
-      else if (!a) why = '이 화면 탭으로 이동하면 쓸 수 있어요';
-      else if (!rows) why = '[조회]를 눌러 학생 목록을 불러와 주세요';
+      // 안내는 두 가지로만: 꺼져 있으면 나이스 메뉴 경로, 켜져 있으면 [조회]
+      if (!inst.length || !a || !rows) why = sc.path || '나이스에서 이 화면을 열고 [조회]를 눌러 주세요';
       // 입력했지만 저장하지 않은 줄(새 줄·수정·삭제)
       let dirty = 0;
       for (const x of inst) { try { const d = x.lookup(sc.dirtyDs || sc.ds); for (let r = 0; r < d.getRowCount(); r++) if (d.getRowState(r) !== 1) dirty++; } catch (_) {} }
@@ -825,7 +824,7 @@ ${sv.err}
         const on = !why;
         const b = el('button', `display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid ${on ? '#b77a00' : '#ccc'};background:${on ? '#fff7e6' : '#f4f4f4'};color:${on ? '#222' : '#999'};font-weight:700;cursor:${on ? 'pointer' : 'default'}`);
         b.append(el('div', null, sc.label), rich('div', `font-weight:400;font-size:12px;white-space:pre-line;line-height:22px;color:${dirty ? '#b3261e' : '#888'}`,
-          (why || '누르면 시작해요') + (dirty ? `\n⚠ 입력했지만 아직 [저장]하지 않은 칸이 ${dirty}개 있어요. 저장하거나 [조회]로 지워 주세요.` : '')));
+          (why || '[조회]를 눌러 주세요') + (dirty ? `\n⚠ 입력했지만 아직 [저장]하지 않은 칸이 ${dirty}개 있어요. 저장하거나 [조회]로 지워 주세요.` : '')));
         b.disabled = !on;
         if (on) b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
         list.append(b);
