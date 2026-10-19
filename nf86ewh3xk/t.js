@@ -103,6 +103,8 @@
   const norm = (s) => String(s || '').replace(/[\s,·・‧.\-/()（）]/g, '');
   // 이름 비교: 나이스의 동명이인·전입 표시(괄호 안, 끝의 영문 글자)는 빼고 본다
   const nameKey = (s) => norm(String(s || '').replace(/\([^)]*\)|（[^）]*）/g, '').replace(/\s*[A-Za-z]$/, ''));
+  // 같은 학생으로 본다: 표시를 뺀 이름이 같거나, 한쪽이 다른 쪽으로 시작(앱에서 동명이인을 '홍길동2'처럼 구분한 경우)
+  const sameName = (a, b) => { const x = nameKey(a), y = nameKey(b); return x === y || (Math.min(x.length, y.length) >= 2 && (x.startsWith(y) || y.startsWith(x))); };
 
   // 나이스 평가 항목마다 엑셀 열을 고른다. 영역 이름이 같은 열이 하나뿐일 때만 자동으로 짝짓는다.
   function autoMatch(items, columns) {
@@ -135,7 +137,7 @@
       changes.push({ r: row.r, opt });
     }
     const numbersOnlyInFile = [...sheet.students.keys()].filter((n) => !neis.numbers.has(n));
-    const nameMismatch = [...sheet.students.entries()].filter(([n, s]) => neis.names.has(n) && s.name && nameKey(neis.names.get(n)) !== nameKey(s.name)).map(([n]) => n);
+    const nameMismatch = [...sheet.students.entries()].filter(([n, s]) => neis.names.has(n) && s.name && !sameName(neis.names.get(n), s.name)).map(([n]) => n);
     return { changes, stats, numbersOnlyInFile, nameMismatch };
   }
 
@@ -168,7 +170,7 @@
     }
     const byNo = new Map(rows.map((x) => [x.no, x.name]));
     const numbersOnlyInFile = [...source.keys()].filter((n) => !numbers.has(n));
-    const nameMismatch = [...source.entries()].filter(([n, v]) => byNo.has(n) && v.name && nameKey(byNo.get(n)) !== nameKey(v.name)).map(([n]) => n);
+    const nameMismatch = [...source.entries()].filter(([n, v]) => byNo.has(n) && v.name && !sameName(byNo.get(n), v.name)).map(([n]) => n);
     return { changes, stats, numbersOnlyInFile, nameMismatch };
   }
 
@@ -585,7 +587,7 @@
       for (const x of all) { if (!x.date) continue; if (!byNo.has(x.no)) byNo.set(x.no, []); byNo.get(x.no).push(x); }
       const nos = [...byNo.keys()].sort((a, b) => a - b);
       const missing = nos.filter((n) => !roster.has(n));
-      const mismatch = nos.filter((n) => roster.has(n) && byNo.get(n)[0].name && nameKey(roster.get(n).name) !== nameKey(byNo.get(n)[0].name));
+      const mismatch = nos.filter((n) => roster.has(n) && byNo.get(n)[0].name && !sameName(roster.get(n).name, byNo.get(n)[0].name));
       const todo = nos.filter((n) => roster.has(n));
       const status = new Map(todo.map((n) => [n, '대기']));
 
