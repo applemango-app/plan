@@ -220,7 +220,7 @@
     document.getElementById(PANEL_ID)?.remove();
     const neis = readNeis(app);
     if (!neis.rows.length) return banner('먼저 과목을 고르고 조회를 눌러 주세요', '#b3261e');
-    const panel = el('div', 'position:fixed;top:60px;right:20px;width:560px;max-height:80vh;overflow:auto;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
+    const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:560px;max-height:70vh;overflow:auto;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
     panel.id = PANEL_ID;
     const close = el('button', 'float:right;border:0;background:none;font-size:20px;cursor:pointer', '✕');
     close.onclick = () => panel.remove();
@@ -382,7 +382,7 @@
 
   function probePanel(msg) {
     document.getElementById(PANEL_ID)?.remove();
-    const panel = el('div', 'position:fixed;top:60px;right:20px;width:360px;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
+    const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:360px;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
     panel.id = PANEL_ID;
     const close = el('button', 'float:right;border:0;background:none;font-size:20px;cursor:pointer', '✕');
     close.onclick = () => panel.remove();
@@ -395,7 +395,7 @@
   // ---------- 공통 패널 ----------
   function makePanel(title, isMenu) {
     document.getElementById(PANEL_ID)?.remove();
-    const panel = el('div', 'position:fixed;top:60px;right:20px;width:520px;max-height:80vh;overflow:auto;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
+    const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:520px;max-height:70vh;overflow:auto;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
     panel.id = PANEL_ID;
     const close = el('button', 'float:right;border:0;background:none;font-size:20px;cursor:pointer', '✕');
     close.onclick = () => panel.remove();
@@ -623,7 +623,7 @@
 
   // 오른쪽 아래 🥭 버튼: 즐겨찾기를 다시 누르지 않아도 메뉴를 연다(페이지를 새로 고치기 전까지). 다시 불러오면 새것으로 바꾼다.
   document.getElementById('applemango-fab')?.remove();
-  const fab = el('button', 'position:fixed;right:24px;bottom:24px;width:52px;height:52px;border-radius:50%;border:2px solid #b77a00;background:#f2a516;font-size:26px;line-height:1;z-index:2147483645;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3)', '🥭');
+  const fab = el('button', 'position:fixed;right:20px;bottom:44px;padding:10px 18px;border-radius:24px;border:3px solid #fff;background:#e8890c;color:#fff;font:700 16px/1 "Malgun Gothic",sans-serif;z-index:2147483645;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45)', '🥭 애플망고');
   fab.id = 'applemango-fab';
   fab.title = '애플망고 메뉴';
   fab.onclick = () => openMenu();
