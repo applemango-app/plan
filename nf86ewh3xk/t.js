@@ -585,7 +585,7 @@
 
   function openMenu() {
     const { panel, body } = makePanel('🥭 애플망고 → 나이스', true);
-    body.append(el('div', 'margin-bottom:8px', '지금 보고 있는 화면에 넣을 수 있어요. 탭을 바꾸면 버튼도 따라 바뀌어요.'));
+    body.append(el('div', 'margin-bottom:8px', '지금 보고 있는 화면에 넣을 수 있어요. 나이스 화면을 바꾸면 버튼도 따라 바뀌어요.'));
     const list = el('div');
     body.append(list);
     let sig = '';
@@ -606,8 +606,15 @@
       }
     };
     render();
-    // 메뉴가 열려 있는 동안 1초마다 탭·조회 상태를 다시 본다. 메뉴가 닫히면 멈춘다.
-    const timer = setInterval(() => { if (!panel.isConnected) return clearInterval(timer); try { render(); } catch (_) {} }, 1000);
+    // 나이스 화면이 바뀔 때(메인 탭·안쪽 탭 전환, 조회)만 다시 본다. 변화가 몰리면 0.3초 모아서 한 번. 메뉴가 닫히면 멈춘다.
+    let pending = 0;
+    const obs = new MutationObserver((muts) => {
+      if (!panel.isConnected) return obs.disconnect();
+      if (muts.every((m) => panel.contains(m.target))) return;
+      if (pending) return;
+      pending = setTimeout(() => { pending = 0; try { render(); } catch (_) {} }, 300);
+    });
+    obs.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });
     const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
     probeBtn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
     body.append(probeBtn);
