@@ -491,66 +491,121 @@
     document.body.appendChild(panel);
   }
 
-  // ---------- 누가기록: 행추가 시험(저장 안 함) ----------
-  // 나이스의 [행추가] 버튼을 눌러 나이스가 새 줄을 만들게 하고(학생·학년·오늘 날짜가 들어감), 날짜와 내용만 바꾼다.
-  function openRecordPanel(app) {
-    const { panel, body } = makePanel('🥭 누가기록 (시험)');
-    const rec = app.lookup('dsGicRecStu');
-    const sel = app.lookup('dmSearch').getValue('stuInvlNo');
-    let no = '';
-    const stu = app.lookup('dsStu');
-    for (let r = 0; r < stu.getRowCount(); r++) if (stu.getValue(r, 'stuInvlNo') === sel) no = stu.getValue(r, 'clsNo');
-    body.append(el('div', null, sel ? `선택된 학생: ${no}번 · 기록 ${rec.getRowCount()}건` : '먼저 학생 목록에서 학생 한 명을 클릭해 주세요.'));
-    const test = el('button', 'margin-top:10px;padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '행추가 시험 (저장 안 함)');
-    test.disabled = !sel;
-    test.onclick = () => {
-      const before = rec.getRowCount();
-      const out = { before };
-      try { app.lookup('btnAdd').click(); out.click = 'ok'; } catch (e) { out.click = '실패 ' + e.message; }
-      out.after = rec.getRowCount();
-      const r = rec.getRowCount() - 1;
-      if (out.after > before) {
-        out.defaultDate = rec.getValue(r, 'ghvrDevEnfcYmd');
-        rec.setValue(r, 'ghvrDevEnfcYmd', '20261018');
-        rec.setValue(r, 'ghvrDevCn', '애플망고 시험 기록');
-        try { app.lookup('grdGicRecStu').redraw(); } catch (_) {}
-        out.row = { state: rec.getRowState(r), shlCd: rec.getValue(r, 'shlCd'), stuSame: rec.getValue(r, 'stuInvlNo') === sel, grd: rec.getValue(r, 'grd'), ayr: rec.getValue(r, 'ayr'), date: rec.getValue(r, 'ghvrDevEnfcYmd'), regSn: rec.getValue(r, 'regSn') };
-      }
-      body.append(el('pre', 'white-space:pre-wrap;background:#f7f7f7;padding:8px;border-radius:8px;font-size:12px', JSON.stringify(out, null, 1)),
-        el('div', null, '목록 맨 아래에 10월 18일 "애플망고 시험 기록"이 보이면 성공이에요. 저장하지 말고 [조회]로 되돌려 주세요.'));
-    };
-    body.append(test);
+  // ---------- 누가기록: 앱 누가기록 엑셀(번호 | 이름 | 날짜 | 누가기록)을 학생마다 넣는다 ----------
+  // 나이스 [행추가]를 눌러 나이스가 새 줄을 만들게 하고(학생·학년·오늘 날짜), 날짜와 내용만 바꾼다.
+  // 같은 날짜·같은 내용의 기록이 이미 있으면 건너뛴다(두 번 실행해도 중복되지 않게). 저장은 학생마다 선생님이 누른다.
+  function toYmd(v) {
+    const t = String(v == null ? '' : v).trim();
+    let m = t.match(/^(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
+    if (m) return m[1] + m[2].padStart(2, '0') + m[3].padStart(2, '0');
+    if (/^\d{8}$/.test(t)) return t;
+    if (/^\d{5}(\.\d+)?$/.test(t)) { // 엑셀 날짜 숫자
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(t)) * 86400000);
+      return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, '0') + String(d.getUTCDate()).padStart(2, '0');
+    }
+    return '';
+  }
+  function parseRecordSheet(rows) {
+    const h = (rows[0] || []).map((x) => String(x || '').trim());
+    if (h[0] !== '번호' || h[2] !== '날짜' || !/누가기록/.test(h[3] || '')) return null;
+    const out = [];
+    for (const r of rows.slice(1)) {
+      const no = Number(String(r[0] || '').trim());
+      const text = String(r[3] || '').trim();
+      if (!Number.isInteger(no) || no <= 0 || !text) continue;
+      out.push({ no, name: String(r[1] || '').trim(), date: toYmd(r[2]), text });
+    }
+    return out;
+  }
+  const recKey = (date, text) => date + '|' + norm(text);
 
-    // 학생 고르기 시험: 스크립트가 학생 목록에서 다른 학생을 골랐을 때 그 학생 기록이 불러와지는지 본다(읽기만).
-    const pickRow = el('div', 'margin-top:14px');
-    const numIn = el('input', 'width:60px;padding:4px;margin-right:6px');
-    numIn.type = 'number';
-    numIn.value = 15;
-    const pickBtn = el('button', 'padding:6px 12px;border-radius:8px;border:1px solid #b77a00;background:#fff7e6;font-weight:700;cursor:pointer', '번 학생 고르기 시험 (읽기만)');
-    pickRow.append(numIn, pickBtn);
-    body.append(pickRow);
-    pickBtn.onclick = async () => {
-      const want = Number(numIn.value);
-      let row = -1;
-      for (let r = 0; r < stu.getRowCount(); r++) if (Number(stu.getValue(r, 'clsNo')) === want) row = r;
-      if (row < 0) return banner('그 번호가 학생 목록에 없어요', '#b3261e');
-      const target = stu.getValue(row, 'stuInvlNo');
+  function openRecordPanel(app) {
+    const { panel, body } = makePanel('🥭 누가기록');
+    const rec = app.lookup('dsGicRecStu');
+    const stu = app.lookup('dsStu');
+    const roster = new Map(); // 번호 → { row, inv, name }
+    for (let r = 0; r < stu.getRowCount(); r++) roster.set(Number(stu.getValue(r, 'clsNo')), { row: r, inv: stu.getValue(r, 'stuInvlNo'), name: stu.getValue(r, 'stuFlnm') });
+    const dirtyRows = () => { let n = 0; for (let r = 0; r < rec.getRowCount(); r++) if (rec.getRowState(r) !== 1) n++; return n; };
+
+    // 학생 고르기: 시험에서 확인한 방법을 차례로 쓴다. 그 학생 기록이 불러와질 때까지 기다린다.
+    async function selectStudent(no) {
+      const s = roster.get(no);
+      const loaded = () => app.lookup('dmSearch').getValue('stuInvlNo') === s.inv && (rec.getRowCount() === 0 || rec.getValue(0, 'stuInvlNo') === s.inv);
+      if (loaded()) return true;
       const g = app.lookup('grdStu');
-      const log = [];
-      const loaded = () => app.lookup('dmSearch').getValue('stuInvlNo') === target && (rec.getRowCount() === 0 || rec.getValue(0, 'stuInvlNo') === target);
       const wait = async (ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (loaded()) return true; await new Promise((r) => setTimeout(r, 200)); } return loaded(); };
-      const tries = [
-        ['selectRows', () => g.selectRows([row])],
-        ['focusCell', () => g.focusCell(row, 1)],
-        ['clickCell', () => { const c = g.getCellElement ? g.getCellElement(row, 1) : null; if (!c) throw Error('셀 요소 없음'); c.click(); }],
-      ];
-      for (const [name, fn] of tries) {
-        try { fn(); log.push(name + ' 실행'); } catch (e) { log.push(name + ' 실패 ' + String(e.message).slice(0, 60)); continue; }
-        if (await wait(4000)) { log.push(`✔ ${name}로 ${want}번 기록 ${rec.getRowCount()}건 불러옴`); break; }
-        log.push(name + ' 뒤 4초 동안 안 불러와짐');
+      for (const fn of [() => g.selectRows([s.row]), () => g.focusCell(s.row, 1), () => g.getCellElement(s.row, 1).click()]) {
+        try { fn(); } catch (_) { continue; }
+        if (await wait(5000)) { await new Promise((r) => setTimeout(r, 300)); return true; }
       }
-      body.append(el('pre', 'white-space:pre-wrap;background:#f7f7f7;padding:8px;border-radius:8px;font-size:12px', log.join('\n')));
-    };
+      return false;
+    }
+
+    filePicker(body, '앱에서 내보낸 누가기록 엑셀을 고르세요.', (sheets, fileName) => {
+      let all = null;
+      for (const x of sheets) { all = parseRecordSheet(x.rows); if (all) break; }
+      if (!all) throw Error('누가기록 시트(번호 | 이름 | 날짜 | 누가기록)를 찾지 못했어요');
+      const badDate = all.filter((x) => !x.date).length;
+      const byNo = new Map();
+      for (const x of all) { if (!x.date) continue; if (!byNo.has(x.no)) byNo.set(x.no, []); byNo.get(x.no).push(x); }
+      const nos = [...byNo.keys()].sort((a, b) => a - b);
+      const missing = nos.filter((n) => !roster.has(n));
+      const mismatch = nos.filter((n) => roster.has(n) && byNo.get(n)[0].name && norm(roster.get(n).name) !== norm(byNo.get(n)[0].name));
+      const todo = nos.filter((n) => roster.has(n));
+      const status = new Map(todo.map((n) => [n, '대기']));
+
+      body.textContent = '';
+      body.append(el('div', 'color:#666;margin-bottom:6px', '파일: ' + fileName));
+      const lines = [`학생 ${nos.length}명 · 기록 ${all.length - badDate}건`];
+      if (badDate) lines.push(`⚠ 날짜를 읽지 못한 기록 ${badDate}건은 빼요`);
+      if (missing.length) lines.push(`⚠ 나이스 학생 목록에 없는 번호: ${missing.join(', ')} (빼요)`);
+      if (mismatch.length) lines.push(`⚠ 이름이 다른 번호: ${mismatch.join(', ')} — 다른 반 파일인지 확인하세요`);
+      lines.push('같은 날짜·같은 내용의 기록이 나이스에 이미 있으면 건너뛰어요.');
+      body.append(el('div', 'margin:8px 0;padding:8px;background:#f7f7f7;border-radius:8px;white-space:pre-line', lines.join('\n')));
+      const list = el('div', 'margin:8px 0;font-size:13px;max-height:180px;overflow:auto;border:1px solid #eee;border-radius:8px;padding:6px');
+      const msg = el('div', 'margin:8px 0;font-weight:700;white-space:pre-line');
+      const go = el('button', 'padding:8px 14px;border-radius:8px;border:0;background:#1f7a3a;color:#fff;font-weight:700;cursor:pointer');
+      body.append(list, msg, go);
+      let idx = 0;
+      const drawList = () => {
+        list.textContent = '';
+        for (const n of todo) list.append(el('div', `padding:2px 4px;${n === todo[idx] ? 'background:#fff7e6;font-weight:700' : ''}`, `${n}번 · ${byNo.get(n).length}건 · ${status.get(n)}`));
+        go.textContent = idx < todo.length ? `${todo[idx]}번 학생 기록 넣기` : '모두 끝났어요';
+        go.disabled = idx >= todo.length;
+        go.style.opacity = go.disabled ? 0.5 : 1;
+      };
+      go.onclick = async () => {
+        const no = todo[idx];
+        if (dirtyRows()) { msg.textContent = '⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]을 누른 뒤 다시 눌러 주세요.'; msg.style.color = '#b3261e'; return; }
+        if (idx > 0 && status.get(todo[idx - 1]).startsWith('넣음')) status.set(todo[idx - 1], status.get(todo[idx - 1]).replace('넣음', '저장됨 ✓'));
+        go.disabled = true;
+        msg.style.color = '#222';
+        msg.textContent = `${no}번 학생을 고르는 중…`;
+        if (!(await selectStudent(no))) { msg.textContent = `⚠ ${no}번 학생 기록을 불러오지 못했어요. 학생 목록에서 ${no}번을 직접 클릭한 뒤 다시 눌러 주세요.`; msg.style.color = '#b3261e'; go.disabled = false; return; }
+        const have = new Set();
+        for (let r = 0; r < rec.getRowCount(); r++) have.add(recKey(String(rec.getValue(r, 'ghvrDevEnfcYmd') || ''), rec.getValue(r, 'ghvrDevCn')));
+        let added = 0, skipped = 0;
+        for (const x of byNo.get(no)) {
+          if (have.has(recKey(x.date, x.text))) { skipped++; continue; }
+          const before = rec.getRowCount();
+          app.lookup('btnAdd').click();
+          if (rec.getRowCount() <= before) { msg.textContent = '⚠ 행추가가 되지 않았어요. 멈출게요.'; msg.style.color = '#b3261e'; return; }
+          const r = rec.getRowCount() - 1;
+          rec.setValue(r, 'ghvrDevEnfcYmd', x.date);
+          rec.setValue(r, 'ghvrDevCn', x.text);
+          have.add(recKey(x.date, x.text));
+          added++;
+        }
+        try { app.lookup('grdGicRecStu').redraw(); } catch (_) {}
+        status.set(no, added ? `넣음 ${added}건${skipped ? ` (이미 있음 ${skipped}건)` : ''}` : `모두 이미 있음 (${skipped}건)`);
+        idx++;
+        msg.textContent = added
+          ? `✔ ${no}번에 ${added}건을 넣었어요. 화면에서 확인하고 나이스 [저장]을 누른 뒤, 아래 버튼으로 다음 학생으로 가세요.`
+          : `${no}번은 넣을 기록이 없어요(모두 이미 있음). 다음 학생으로 가세요.`;
+        drawList();
+      };
+      drawList();
+    });
     document.body.appendChild(panel);
   }
 
@@ -559,9 +614,9 @@
     { re: /els_scres00_m02$/, ds: 'dsMain', grid: 'grdMain', label: '교과별 평가 (단계)', open: (a) => openPanel(a) },
     { re: /els_scres10_m00$/, ds: 'dsMain', grid: 'grdMain', label: '학기말 종합의견 (과목별)', open: (a) => openTextPanel(a, 'subjText', '학기말 종합의견') },
     { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', grid: 'grdMain', label: '행동특성 및 종합의견', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
-    { re: /els_sdlbg00_m01$/, ds: 'dsStu', grid: 'grdStu', dirtyDs: 'dsGicRecStu', label: '누가기록 (시험)', open: (a) => openRecordPanel(a) },
+    { re: /els_sdlbg00_m01$/, ds: 'dsStu', grid: 'grdStu', dirtyDs: 'dsGicRecStu', label: '누가기록', open: (a) => openRecordPanel(a) },
   ];
-  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, parseBehaviorSheet, planText, autoMatch, plan, norm }; return; }
+  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, parseBehaviorSheet, parseRecordSheet, toYmd, planText, autoMatch, plan, norm }; return; }
   if (!window.cpr) return banner('나이스 화면에서 눌러 주세요', '#b3261e');
   // 탭이 화면에 보이는지: 그 화면 표의 실제 크기가 0이 아니면 보이는 탭
   const shown = (a, gridId) => { try { const r = a.lookup(gridId).getActualRect(); return r.width > 0 && r.height > 0; } catch (_) { return false; } };
