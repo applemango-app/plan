@@ -583,7 +583,8 @@
     for (const x of inst) { try { const d = x.lookup(sc.dirtyDs || sc.ds); for (let r = 0; r < d.getRowCount(); r++) if (d.getRowState(r) !== 1) dirty++; } catch (_) {} }
     const on = !why;
     const b = el('button', `display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid ${on ? '#b77a00' : '#ccc'};background:${on ? '#fff7e6' : '#f4f4f4'};color:${on ? '#222' : '#999'};font-weight:700;cursor:${on ? 'pointer' : 'default'}`);
-    b.append(el('div', null, sc.label), el('div', `font-weight:400;font-size:12px;color:${dirty ? '#b3261e' : '#888'}`, (why ? why : '누르면 시작해요') + (dirty ? ` · ⚠ 저장 안 된 변경 ${dirty}칸` : '')));
+    b.append(el('div', null, sc.label), el('div', `font-weight:400;font-size:12px;white-space:pre-line;color:${dirty ? '#b3261e' : '#888'}`, (why ? why : '누르면 시작해요') + (dirty ? `
+⚠ 입력했지만 아직 [저장]하지 않은 칸이 ${dirty}개 있어요. 저장하거나 [조회]로 지워 주세요.` : '')));
     b.disabled = !on;
     if (on) b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
     body.append(b);
