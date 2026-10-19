@@ -78,18 +78,20 @@
 
   // ---------- 애플망고 결과 시트 해석 ----------
   // 1행: 영역(같은 영역이 이어지면 첫 칸에만), 2행: 번호 | 이름 | 단원(방법)… | (관찰 기록) | (특이사항) | 종합의견
+  // 3행(앱 1.0.5부터): '' | 평가요소 | 평가마다 평가요소. 예전 파일엔 없다.
   const TAIL = /^(관찰 기록|특이사항|종합의견|세부능력 및 특기사항)$/;
   function parseResultSheet(rows) {
     const head = rows[1] || [];
     if (String(head[0]).trim() !== '번호') return null;
     const columns = [];
     let area = '', summaryCol = -1;
+    const crit = String((rows[2] || [])[1] || '').trim() === '평가요소' ? rows[2] : null;
     for (let c = 2; c < head.length; c++) {
       const label = String(head[c] || '').trim();
       if (/^(종합의견|세부능력 및 특기사항)$/.test(label)) summaryCol = c;
       if (!label || TAIL.test(label)) continue;
       if (String((rows[0] || [])[c] || '').trim()) area = String(rows[0][c]).trim();
-      columns.push({ col: c, area, label });
+      columns.push({ col: c, area, label, criteria: crit ? String(crit[c] || '').trim() : '' });
     }
     const students = new Map();
     for (const r of rows.slice(2)) {
@@ -106,11 +108,17 @@
   // 같은 학생으로 본다: 표시를 뺀 이름이 같거나, 한쪽이 다른 쪽으로 시작(앱에서 동명이인을 '홍길동2'처럼 구분한 경우)
   const sameName = (a, b) => { const x = nameKey(a), y = nameKey(b); return x === y || (Math.min(x.length, y.length) >= 2 && (x.startsWith(y) || y.startsWith(x))); };
 
-  // 나이스 평가 항목마다 엑셀 열을 고른다. 영역 이름이 같은 열이 하나뿐일 때만 자동으로 짝짓는다.
+  // 나이스 평가 항목마다 엑셀 열을 고른다.
+  // 1) 평가요소가 같은 열이 하나뿐이면 그 열(한 영역에 평가가 여럿이어도 맞는다).
+  // 2) 평가요소 줄이 없는 예전 파일이면, 영역 이름이 같은 열이 하나뿐일 때만 짝짓는다.
   function autoMatch(items, columns) {
     const byArea = new Map();
     for (const it of items) { const k = norm(it.relmNm); byArea.set(k, (byArea.get(k) || 0) + 1); }
     return items.map((it) => {
+      const g = norm(it.lrnGoalCn);
+      const byCrit = g ? columns.map((c, i) => [c, i]).filter(([c]) => c.criteria && norm(c.criteria) === g) : [];
+      if (byCrit.length === 1) return byCrit[0][1];
+      if (byCrit.length > 1) return -1;
       const k = norm(it.relmNm);
       const cands = columns.map((c, i) => [c, i]).filter(([c]) => norm(c.area) === k);
       return cands.length === 1 && byArea.get(k) === 1 ? cands[0][1] : -1;
@@ -296,7 +304,7 @@
         tr.append(el('td', 'padding:4px;border-bottom:1px solid #eee', it.relmNm), el('td', 'padding:4px;border-bottom:1px solid #eee', it.lrnGoalCn));
         const sel = el('select', 'max-width:200px;padding:2px');
         const none = el('option', null, '— 넣지 않음 —'); none.value = -1; sel.append(none);
-        sheet.columns.forEach((c, ci) => { const o = el('option', null, `${c.area} · ${c.label}`); o.value = ci; sel.append(o); });
+        sheet.columns.forEach((c, ci) => { const o = el('option', null, `${c.area} · ${c.label}${c.criteria ? ` · ${c.criteria}` : ''}`); o.value = ci; sel.append(o); });
         sel.value = choice[i];
         sel.onchange = () => { choice[i] = Number(sel.value); update(); };
         const td = el('td', 'padding:4px;border-bottom:1px solid #eee'); td.append(sel); tr.append(td);
