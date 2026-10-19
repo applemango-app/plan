@@ -623,10 +623,16 @@
 
   // 오른쪽 아래 🥭 버튼: 즐겨찾기를 다시 누르지 않아도 메뉴를 연다(페이지를 새로 고치기 전까지). 다시 불러오면 새것으로 바꾼다.
   document.getElementById('applemango-fab')?.remove();
-  const fab = el('button', 'position:fixed;right:20px;bottom:44px;padding:10px 18px;border-radius:24px;border:3px solid #fff;background:#e8890c;color:#fff;font:700 16px/1 "Malgun Gothic",sans-serif;z-index:2147483645;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45)', '🥭 애플망고');
-  fab.id = 'applemango-fab';
-  fab.title = '애플망고 메뉴';
+  const fabWrap = el('div', 'position:fixed;right:20px;bottom:44px;z-index:2147483645');
+  fabWrap.id = 'applemango-fab';
+  const fab = el('button', 'padding:10px 18px;border-radius:24px;border:3px solid #fff;background:#e8890c;color:#fff;font:700 16px/1 "Malgun Gothic",sans-serif;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45)', '🥭 애플망고');
+  fab.title = '애플망고 메뉴 열기';
   fab.onclick = () => openMenu();
-  document.body.appendChild(fab);
+  // 오른쪽 위 작은 X: 애플망고 버튼과 열린 창을 모두 닫는다(다시 쓰려면 즐겨찾기를 누른다)
+  const x = el('button', 'position:absolute;top:-10px;right:-10px;width:24px;height:24px;border-radius:50%;border:2px solid #fff;background:#555;color:#fff;font:700 12px/1 sans-serif;cursor:pointer;padding:0', '✕');
+  x.title = '애플망고 닫기';
+  x.onclick = () => { document.getElementById(PANEL_ID)?.remove(); fabWrap.remove(); };
+  fabWrap.append(fab, x);
+  document.body.appendChild(fabWrap);
   openMenu();
 })();
