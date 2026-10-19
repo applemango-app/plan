@@ -563,36 +563,55 @@
   ];
   if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, parseBehaviorSheet, planText, autoMatch, plan, norm }; return; }
   if (!window.cpr) return banner('나이스 화면에서 눌러 주세요', '#b3261e');
-  function openMenu() {
-  const running = cpr.core.Platform.INSTANCE.getAllRunningAppInstances();
   // 탭이 화면에 보이는지: 그 화면 표의 실제 크기가 0이 아니면 보이는 탭
   const shown = (a, gridId) => { try { const r = a.lookup(gridId).getActualRect(); return r.width > 0 && r.height > 0; } catch (_) { return false; } };
-  const { panel, body } = makePanel('🥭 애플망고 → 나이스', true);
-  body.append(el('div', 'margin-bottom:8px', '지금 보고 있는 화면에 넣을 수 있어요.'));
-  for (const sc of SCREENS) {
-    const inst = running.filter((a) => a.app && sc.re.test(a.app.id));
-    let a = inst.find((x) => shown(x, sc.grid)) || null;
-    let rows = 0;
-    try { if (a) rows = a.lookup(sc.ds).getRowCount(); } catch (_) {}
-    let why = '';
-    if (!inst.length) why = '나이스에서 이 화면을 열고 조회해 주세요';
-    else if (!a) why = '이 화면 탭으로 이동하면 쓸 수 있어요';
-    else if (!rows) why = '조회를 눌러 학생 목록을 불러와 주세요';
-    // 저장 안 된 변경(새 줄·수정·삭제)이 있으면 함께 알려 준다
-    let dirty = 0;
-    for (const x of inst) { try { const d = x.lookup(sc.dirtyDs || sc.ds); for (let r = 0; r < d.getRowCount(); r++) if (d.getRowState(r) !== 1) dirty++; } catch (_) {} }
-    const on = !why;
-    const b = el('button', `display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid ${on ? '#b77a00' : '#ccc'};background:${on ? '#fff7e6' : '#f4f4f4'};color:${on ? '#222' : '#999'};font-weight:700;cursor:${on ? 'pointer' : 'default'}`);
-    b.append(el('div', null, sc.label), el('div', `font-weight:400;font-size:12px;white-space:pre-line;color:${dirty ? '#b3261e' : '#888'}`, (why ? why : '누르면 시작해요') + (dirty ? `
-⚠ 입력했지만 아직 [저장]하지 않은 칸이 ${dirty}개 있어요. 저장하거나 [조회]로 지워 주세요.` : '')));
-    b.disabled = !on;
-    if (on) b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
-    body.append(b);
+  function menuState() {
+    const running = cpr.core.Platform.INSTANCE.getAllRunningAppInstances();
+    return SCREENS.map((sc) => {
+      const inst = running.filter((a) => a.app && sc.re.test(a.app.id));
+      const a = inst.find((x) => shown(x, sc.grid)) || null;
+      let rows = 0;
+      try { if (a) rows = a.lookup(sc.ds).getRowCount(); } catch (_) {}
+      let why = '';
+      if (!inst.length) why = '나이스에서 이 화면을 열고 조회해 주세요';
+      else if (!a) why = '이 화면 탭으로 이동하면 쓸 수 있어요';
+      else if (!rows) why = '조회를 눌러 학생 목록을 불러와 주세요';
+      // 입력했지만 저장하지 않은 줄(새 줄·수정·삭제)
+      let dirty = 0;
+      for (const x of inst) { try { const d = x.lookup(sc.dirtyDs || sc.ds); for (let r = 0; r < d.getRowCount(); r++) if (d.getRowState(r) !== 1) dirty++; } catch (_) {} }
+      return { sc, a, why, dirty };
+    });
   }
-  const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
-  probeBtn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
-  body.append(probeBtn);
-  document.body.appendChild(panel);
+
+  function openMenu() {
+    const { panel, body } = makePanel('🥭 애플망고 → 나이스', true);
+    body.append(el('div', 'margin-bottom:8px', '지금 보고 있는 화면에 넣을 수 있어요. 탭을 바꾸면 버튼도 따라 바뀌어요.'));
+    const list = el('div');
+    body.append(list);
+    let sig = '';
+    const render = () => {
+      const st = menuState();
+      const now = JSON.stringify(st.map((x) => [x.why, x.dirty, !!x.a]));
+      if (now === sig) return;
+      sig = now;
+      list.textContent = '';
+      for (const { sc, a, why, dirty } of st) {
+        const on = !why;
+        const b = el('button', `display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid ${on ? '#b77a00' : '#ccc'};background:${on ? '#fff7e6' : '#f4f4f4'};color:${on ? '#222' : '#999'};font-weight:700;cursor:${on ? 'pointer' : 'default'}`);
+        b.append(el('div', null, sc.label), el('div', `font-weight:400;font-size:12px;white-space:pre-line;color:${dirty ? '#b3261e' : '#888'}`,
+          (why || '누르면 시작해요') + (dirty ? `\n⚠ 입력했지만 아직 [저장]하지 않은 칸이 ${dirty}개 있어요. 저장하거나 [조회]로 지워 주세요.` : '')));
+        b.disabled = !on;
+        if (on) b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
+        list.append(b);
+      }
+    };
+    render();
+    // 메뉴가 열려 있는 동안 1초마다 탭·조회 상태를 다시 본다. 메뉴가 닫히면 멈춘다.
+    const timer = setInterval(() => { if (!panel.isConnected) return clearInterval(timer); try { render(); } catch (_) {} }, 1000);
+    const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
+    probeBtn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
+    body.append(probeBtn);
+    document.body.appendChild(panel);
   }
 
   // 오른쪽 아래 🥭 버튼: 즐겨찾기를 다시 누르지 않아도 메뉴를 연다(페이지를 새로 고치기 전까지). 다시 불러오면 새것으로 바꾼다.
