@@ -782,8 +782,8 @@ ${sv.err}
 
   // ---------- 시작: 화면 메뉴 (버튼은 늘 보이고, 지금 보고 있는 조회된 화면만 누를 수 있다) ----------
   const SCREENS = [
-    { re: /els_scres00_m02$/, ds: 'dsMain', grid: 'grdMain', label: '교과별 평가 (단계)', path: '학급담임 › 성적 › 학생평가 › 교과평가 › 교과별 평가 › [조회]', open: (a) => openPanel(a) },
-    { re: /els_scres10_m00$/, ds: 'dsMain', grid: 'grdMain', label: '학기말 종합의견 (과목별)', open: (a) => openTextPanel(a, 'subjText', '학기말 종합의견') },
+    { re: /els_scres00_m02$/, ds: 'dsMain', grid: 'grdMain', label: '교과별 평가 (단계)', path: '학급담임 › 성적 › 학생평가 › 교과평가 › 교과별 평가 › [조회]를 눌러 주세요', open: (a) => openPanel(a) },
+    { re: /els_scres10_m00$/, ds: 'dsMain', grid: 'grdMain', label: '학기말 종합의견 (과목별)', path: '학급담임 › 성적 › 학생평가 › 학기말종합의견 › [조회]를 눌러 주세요', open: (a) => openTextPanel(a, 'subjText', '학기말 종합의견') },
     { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', grid: 'grdMain', label: '행동특성 및 종합의견', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
     { re: /els_sdlbg00_m01$/, ds: 'dsStu', grid: 'grdStu', dirtyDs: 'dsGicRecStu', label: '누가기록', open: (a) => openRecordPanel(a) },
   ];
