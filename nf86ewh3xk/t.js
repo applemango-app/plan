@@ -621,28 +621,48 @@
       }
 
       // 저장 누르기 → '저장되었습니다' 알림의 [확인]을 눌러 닫기 → 모든 줄이 저장된 상태인지 확인
-      async function saveNow(expected) {
+      // 나이스가 [확인]/[취소]를 묻는 창(예: 결석일)을 띄우면 선생님이 고를 때까지 기다린다.
+      // 확인 → 나이스가 저장하고 '저장되었습니다'가 뜬다. 취소 → 저장되지 않은 채로 { cancelled } 를 돌려준다.
+      async function saveNow(expected, onAsk) {
         const P = cpr.core.Platform.INSTANCE;
         const known = new Set(P.getAllRunningAppInstances());
+        const buttons = (inst) => { try { return inst.getContainer().getAllRecursiveChildren().filter((c) => c.type === 'button'); } catch (_) { return []; } };
+        const textOf = (inst) => { try { return inst.getContainer().getAllRecursiveChildren().filter((c) => c.type === 'output').map((c) => String(c.value || '')).join(' ').trim(); } catch (_) { return ''; } };
         app.lookup('btnSaveStu').click();
-        const t0 = Date.now();
-        let closed = 0;
+        let t0 = Date.now();
+        let closed = 0, asked = '';
         while (Date.now() - t0 < 20000) {
           await new Promise((r) => setTimeout(r, 250));
           for (const inst of P.getAllRunningAppInstances()) {
             if (known.has(inst)) continue;
-            let ok = null;
-            try { ok = inst.getContainer().getAllRecursiveChildren().find((c) => c.type === 'button' && String(c.value || '').trim() === '확인'); } catch (_) {}
+            const bs = buttons(inst);
+            const ok = bs.find((c) => String(c.value || '').trim() === '확인');
             if (!ok) continue;
-            let text = '';
-            try { text = inst.getContainer().getAllRecursiveChildren().filter((c) => c.type === 'output').map((c) => String(c.value || '')).join(' '); } catch (_) {}
-            if (!/저장되었습니다/.test(text)) return { err: '나이스 알림: ' + (text.trim().slice(0, 80) || '(내용 없음)') + ' — 알림을 확인하고 닫아 주세요' };
-            try { ok.click(); closed++; } catch (_) {}
+            const text = textOf(inst);
+            if (/저장되었습니다/.test(text)) { try { ok.click(); closed++; } catch (_) {} known.add(inst); continue; }
+            if (!bs.some((c) => String(c.value || '').trim() === '취소')) return { err: '나이스 알림: ' + (text.slice(0, 80) || '(내용 없음)') + ' — 알림을 확인하고 닫아 주세요' };
+            // 묻는 창: 선생님이 [확인]이나 [취소]를 누를 때까지 기다린다
             known.add(inst);
+            asked = text;
+            onAsk(text);
+            while (P.getAllRunningAppInstances().includes(inst)) await new Promise((r) => setTimeout(r, 250));
+            t0 = Date.now();
           }
-          if (closed && dirtyRows() === 0 && rec.getRowCount() >= expected) return { ok: true };
+          if (closed && dirtyRows() === 0 && rec.getRowCount() >= expected) return { ok: true, asked };
+          // 묻는 창을 닫은 뒤 5초 안에 저장되지 않았으면 [취소]로 본다
+          if (asked && !closed && Date.now() - t0 > 5000 && dirtyRows() > 0) return { cancelled: true, asked };
         }
         return { err: closed ? '저장 뒤 목록이 바뀌지 않았어요' : "'저장되었습니다' 알림을 찾지 못했어요 — 화면을 확인해 주세요" };
+      }
+
+      // 저장하지 않은 새 줄(행추가한 기록)을 화면에서 지운다. 다 지워졌으면 true.
+      function dropUnsaved() {
+        for (let r = rec.getRowCount() - 1; r >= 0; r--) {
+          if (rec.getRowState(r) === 1) continue;
+          try { rec.realDeleteRow(r); } catch (_) { try { rec.revertRow(r); } catch (_) {} }
+        }
+        try { app.lookup('grdGicRecStu').redraw(); } catch (_) {}
+        return dirtyRows() === 0;
       }
 
       one.onclick = async () => {
@@ -683,6 +703,7 @@
       const cont = el('button', btnStyle('#1f7a3a') + ';display:none', '계속 (다음 학생부터)');
       body.insertBefore(cont, confirmBox);
       let addedAll = 0;
+      const cancelledNos = [];
 
       async function runAll() {
         running = true; stopReq = false; cont.style.display = 'none'; drawList();
@@ -693,27 +714,51 @@
           const r = await fillStudent(n);
           if (r.err) { say('⚠ ' + r.err + '. 여기서 멈췄어요.', true); break; }
           if (r.added) {
-            const sv = await saveNow(r.total);
+            const att = atteDates(n);
+            const hit = [...new Set(r.addedDates.filter((d) => att.has(d)))].map(md);
+            const sv = await saveNow(r.total, (text) => say(`${n}번: 나이스가 묻고 있어요.
+${text}
+` +
+              (hit.length ? `출결과 겹치는 날짜: ${hit.join(', ')}
+` : '') +
+              `나이스 창에서 [확인](그래도 저장) 또는 [취소](이 학생은 저장 안 함)를 누르면 ${todo[idx + 1] ? todo[idx + 1] + '번부터' : '마무리'} 이어서 해요.`, true));
+            if (sv.cancelled) {
+              if (!dropUnsaved()) {
+                status.set(n, '⚠ 저장 안 됨 · 확인 필요');
+                running = false; drawList();
+                cont.style.display = 'inline-block';
+                say(`⚠ ${n}번 기록을 저장하지 않았는데, 화면에서 지우지 못했어요. 넣은 줄을 지우거나 고쳐 [저장]한 뒤 [계속]을 눌러 주세요.`, true);
+                return;
+              }
+              status.set(n, `⚠ 저장 안 함 (취소) · ${r.added}건${hit.length ? ` · ${hit.join(', ')}` : ''}`);
+              cancelledNos.push(n);
+              idx++;
+              drawList();
+              continue;
+            }
             if (sv.err) {
               // 일시 정지: 넣은 기록은 화면에 남겨 두고, 선생님이 고쳐 저장한 뒤 [계속]을 누른다
-              const att = atteDates(n);
-              const hit = [...new Set(r.addedDates.filter((d) => att.has(d)))].map(md);
               status.set(n, `⚠ 저장 안 됨 · 확인 필요`);
               running = false; drawList();
               cont.style.display = 'inline-block';
-              say(`⚠ ${n}번 기록이 저장되지 않았어요.\n${sv.err}\n` +
-                (hit.length ? `출결과 겹치는 날짜: ${hit.join(', ')}\n` : '') +
+              say(`⚠ ${n}번 기록이 저장되지 않았어요.
+${sv.err}
+` +
+                (hit.length ? `출결과 겹치는 날짜: ${hit.join(', ')}
+` : '') +
                 `나이스 알림을 닫고, 날짜를 고치거나 기록을 지운 뒤 나이스 [저장]을 누르세요. 그다음 [계속]을 누르면 ${todo[idx + 1] ? todo[idx + 1] + '번부터' : '마무리'} 이어서 해요.`, true);
               return;
             }
-            status.set(n, `저장됨 ✓ ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}`);
+            status.set(n, `저장됨 ✓ ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}${sv.asked ? ' · 확인 후 저장' : ''}`);
             addedAll += r.added;
           } else status.set(n, `모두 이미 있음 (${r.skipped}건)`);
           idx++;
           drawList();
         }
         running = false;
-        if (idx >= todo.length) say(`✔ 끝났어요. 학생 ${todo.length}명, 새 기록 ${addedAll}건을 저장했어요.`);
+        if (idx >= todo.length) say(`✔ 끝났어요. 학생 ${todo.length}명, 새 기록 ${addedAll}건을 저장했어요.` +
+          (cancelledNos.length ? `
+⚠ [취소]해서 저장하지 않은 학생: ${cancelledNos.map((x) => x + '번').join(', ')} — 날짜를 고쳐 따로 넣어 주세요.` : ''), cancelledNos.length > 0);
         drawList();
       }
       cont.onclick = () => {
