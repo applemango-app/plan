@@ -285,9 +285,56 @@
     render();
   }
 
+  // ---------- 화면 구조 조사(개발용) — 학생 이름·문구는 글자 수로만. 결과는 이 PC의 다운로드 폴더에 저장 ----------
+  function probe() {
+    const PERSONAL = /Flnm|Brdt|stdntInfo|stuInvlNo|Cn$|Cn\d$|Nm$/;
+    const out = { at: new Date().toISOString(), screens: [] };
+    const P = cpr.core.Platform.INSTANCE;
+    for (const app of P.getAllRunningAppInstances().filter((a) => a.app && /^edu\//.test(a.app.id))) {
+      let ctrls = [];
+      try { ctrls = app.getContainer().getAllRecursiveChildren(); } catch (_) {}
+      const s = { app: app.app.id, grids: [], buttons: ctrls.filter((c) => c.type === 'button').map((b) => [b.id, b.value]) };
+      for (const g of ctrls.filter((c) => c && c.type === 'grid')) {
+        const ds = g.dataSet;
+        if (!ds || !ds.getRowCount()) continue;
+        const cols = ds.getColumnNames();
+        const r0 = {};
+        for (const c of cols) {
+          const v = ds.getValue(0, c);
+          r0[c] = v == null ? null : PERSONAL.test(c) ? `[${String(v).length}자]` : typeof v === 'number' ? v : String(v).length > 30 ? `[${String(v).length}자]` : v;
+        }
+        let detail = null;
+        try { detail = [...Array(g.detail.cellCount).keys()].map((i) => { const cell = g.detail.getColumn(i); const ctl = cell && cell.control; return { col: cell && cell.columnName, ctrl: ctl && ctl.type, maxLength: ctl && ctl.maxLength }; }); } catch (_) {}
+        s.grids.push({ id: g.id, dataSet: ds.id, rowCount: ds.getRowCount(), cols, firstRow: r0, detail });
+      }
+      s.textareas = ctrls.filter((c) => c.type === 'textarea').map((t) => ({ id: t.id, maxLength: t.maxLength, len: String(t.value || '').length }));
+      if (s.grids.length || s.textareas.length) out.screens.push(s);
+    }
+    const a = el('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
+    a.download = 'applemango-neis-probe-' + Date.now() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    banner(`✔ 화면 구조를 다운로드 폴더에 저장했어요 (화면 ${out.screens.length}개)`, '#1f7a3a');
+  }
+
+  function probePanel(msg) {
+    document.getElementById(PANEL_ID)?.remove();
+    const panel = el('div', 'position:fixed;top:60px;right:20px;width:360px;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
+    panel.id = PANEL_ID;
+    const close = el('button', 'float:right;border:0;background:none;font-size:20px;cursor:pointer', '✕');
+    close.onclick = () => panel.remove();
+    const btn = el('button', 'margin-top:10px;padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '이 화면 구조 조사 저장 (개발용)');
+    btn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
+    panel.append(close, el('div', 'font-weight:700;margin-bottom:6px', '🥭 애플망고'), el('div', null, msg), btn);
+    document.body.appendChild(panel);
+  }
+
   // ---------- 시작 ----------
   if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, autoMatch, plan, norm }; return; }
   const app = findScreen();
-  if (!app) return banner(window.cpr ? '나이스 [교과별 평가] 화면을 열고 조회한 뒤 눌러 주세요' : '나이스 화면에서 눌러 주세요', '#b3261e');
+  if (!window.cpr) return banner('나이스 화면에서 눌러 주세요', '#b3261e');
+  if (!app || !app.lookup('dsMain').getRowCount()) return probePanel('단계 입력은 [교과별 평가] 화면에서 조회한 뒤 눌러 주세요.');
   openPanel(app);
 })();
