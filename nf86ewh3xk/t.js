@@ -320,7 +320,14 @@
             const sample = {};
             if (n) for (const c of cols) { const v = d.getValue(0, c); sample[c] = v == null ? null : /Brdt|Flnm|Nm$|InvlNo|Info/.test(c) ? `[${String(v).length}자]` : /^\d{1,3}$/.test(String(v)) || /^(19|20)\d{2}[-.]?\d{2}[-.]?\d{2}$/.test(String(v)) || /^[A-Z]{1,2}\d*$|^[YN]$/.test(String(v)) ? String(v) : `[${String(v).length}자]`; }
             else if (n === null) for (const c of cols) { const v = d.getValue(c); sample[c] = v == null ? null : /Brdt|Flnm|Nm$|InvlNo|Info/.test(c) ? `[${String(v).length}자]` : /^\d{1,8}$|^[YN]$/.test(String(v)) ? String(v) : `[${String(v).length}자]`; }
-            return { id: d.id, type: d.type, rowCount: n, cols, sample };
+            // 누가기록 목록은 모든 줄과 줄 상태(새 줄/수정/그대로)까지 본다. 내용은 글자 수만.
+            let rows;
+            if (n && /GicRec|^dsDt$/.test(d.id)) rows = [...Array(Math.min(n, 30)).keys()].map((r) => {
+              const o = { _state: d.getRowState ? d.getRowState(r) : null };
+              for (const c of cols) { const v = d.getValue(r, c); o[c] = v == null ? null : /Brdt|Flnm|Nm$|InvlNo|Info|Cn$/.test(c) ? `[${String(v).length}자]` : String(v); }
+              return o;
+            });
+            return { id: d.id, type: d.type, rowCount: n, cols, sample, rows };
           });
         } catch (e) { s.dataSetsError = String(e.message); }
         s.grids2 = ctrls.filter((c) => c && c.type === 'grid').map((g) => ({ id: g.id, dataSet: g.dataSet && g.dataSet.id, rows: g.dataSet && g.dataSet.getRowCount() }));
