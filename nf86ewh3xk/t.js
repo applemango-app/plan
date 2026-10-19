@@ -566,7 +566,10 @@
   const { panel, body } = makePanel('🥭 애플망고 → 나이스');
   body.append(el('div', 'margin-bottom:8px', found.length ? '입력할 화면을 고르세요. (조회된 화면만 보여요)' : '나이스에서 입력 화면을 열고 조회한 뒤 다시 눌러 주세요.'));
   for (const { sc, a } of found) {
-    const b = el('button', 'display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid #b77a00;background:#fff7e6;font-weight:700;cursor:pointer', sc.label);
+    // 저장 안 된 변경(새 줄·수정·삭제)이 있으면 함께 알려 준다
+    let dirty = 0;
+    try { const d = a.lookup(sc.re.test('els_sdlbg00_m01') ? 'dsGicRecStu' : sc.ds); for (let r = 0; r < d.getRowCount(); r++) if (d.getRowState(r) !== 1) dirty++; } catch (_) {}
+    const b = el('button', 'display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid #b77a00;background:#fff7e6;font-weight:700;cursor:pointer', sc.label + (dirty ? '  ⚠ 저장 안 된 변경 ' + dirty + '칸' : '  · 저장 안 된 변경 없음'));
     b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
     body.append(b);
   }
