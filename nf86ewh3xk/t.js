@@ -241,6 +241,9 @@
     body.append(el('div', 'margin-bottom:8px', '앱에서 내보낸 수행평가 결과 엑셀(.xlsx)을 고르세요. 파일은 이 컴퓨터 안에서만 읽어요.'), pick);
     const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
     probeBtn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
+    // 평소엔 숨긴다. 나이스 화면이 바뀌어 다시 조사해야 할 때 Shift를 누른 채 제목 줄을 클릭하면 나타난다.
+    probeBtn.style.display = 'none';
+    panel.firstChild.addEventListener('click', (e) => { if (e.shiftKey) probeBtn.style.display = 'block'; });
     body.append(probeBtn);
     document.body.appendChild(panel);
 
@@ -810,7 +813,7 @@ ${sv.err}
 
   function openMenu() {
     const { panel, body } = makePanel('🥭 애플망고 → 나이스', true);
-    body.append(rich('div', 'margin-bottom:8px;padding:8px 10px;background:#eef3ff;border-radius:8px', '버튼은 안내대로 나이스 화면을 열면 활성화돼요.'));
+    body.append(rich('div', 'margin-bottom:8px;padding:8px 10px;background:#eef3ff;border-radius:8px', '버튼은 안내와 같이 나이스 화면을 열면 활성화돼요.'));
     const list = el('div');
     body.append(list);
     let sig = '';
@@ -844,6 +847,9 @@ ${sv.err}
     obs.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });
     const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
     probeBtn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
+    // 평소엔 숨긴다. 나이스 화면이 바뀌어 다시 조사해야 할 때 Shift를 누른 채 제목 줄을 클릭하면 나타난다.
+    probeBtn.style.display = 'none';
+    panel.firstChild.addEventListener('click', (e) => { if (e.shiftKey) probeBtn.style.display = 'block'; });
     body.append(probeBtn);
     document.body.appendChild(panel);
   }
