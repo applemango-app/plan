@@ -810,7 +810,7 @@ ${sv.err}
 
   function openMenu() {
     const { panel, body } = makePanel('🥭 애플망고 → 나이스', true);
-    body.append(rich('div', 'margin-bottom:8px;padding:8px 10px;background:#eef3ff;border-radius:8px', '꺼진 버튼은 아래 안내대로 나이스 화면을 열면 켜져요.'));
+    body.append(rich('div', 'margin-bottom:8px;padding:8px 10px;background:#eef3ff;border-radius:8px', '버튼은 안내대로 나이스 화면을 열면 활성화돼요.'));
     const list = el('div');
     body.append(list);
     let sig = '';
