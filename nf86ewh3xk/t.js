@@ -546,31 +546,37 @@
     document.body.appendChild(panel);
   }
 
-  // ---------- 시작: 열린 화면 고르기 ----------
+  // ---------- 시작: 화면 메뉴 (버튼은 늘 보이고, 지금 보고 있는 조회된 화면만 누를 수 있다) ----------
   const SCREENS = [
-    { re: /els_scres00_m02$/, ds: 'dsMain', label: '교과별 평가 (단계)', open: (a) => openPanel(a) },
-    { re: /els_scres10_m00$/, ds: 'dsMain', label: '학기말 종합의견 (과목별)', open: (a) => openTextPanel(a, 'subjText', '학기말 종합의견') },
-    { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', label: '행동특성 및 종합의견', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
-    { re: /els_sdlbg00_m01$/, ds: 'dsStu', label: '누가기록 (시험)', open: (a) => openRecordPanel(a) },
+    { re: /els_scres00_m02$/, ds: 'dsMain', grid: 'grdMain', label: '교과별 평가 (단계)', open: (a) => openPanel(a) },
+    { re: /els_scres10_m00$/, ds: 'dsMain', grid: 'grdMain', label: '학기말 종합의견 (과목별)', open: (a) => openTextPanel(a, 'subjText', '학기말 종합의견') },
+    { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', grid: 'grdMain', label: '행동특성 및 종합의견', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
+    { re: /els_sdlbg00_m01$/, ds: 'dsStu', grid: 'grdStu', dirtyDs: 'dsGicRecStu', label: '누가기록 (시험)', open: (a) => openRecordPanel(a) },
   ];
   if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, parseBehaviorSheet, planText, autoMatch, plan, norm }; return; }
   if (!window.cpr) return banner('나이스 화면에서 눌러 주세요', '#b3261e');
   const running = cpr.core.Platform.INSTANCE.getAllRunningAppInstances();
-  const found = [];
-  for (const sc of SCREENS) for (const a of running) {
-    if (!a.app || !sc.re.test(a.app.id)) continue;
-    let n = 0;
-    try { n = a.lookup(sc.ds).getRowCount(); } catch (_) {}
-    if (n) found.push({ sc, a });
-  }
+  // 탭이 화면에 보이는지: 그 화면 표의 실제 크기가 0이 아니면 보이는 탭
+  const shown = (a, gridId) => { try { const r = a.lookup(gridId).getActualRect(); return r.width > 0 && r.height > 0; } catch (_) { return false; } };
   const { panel, body } = makePanel('🥭 애플망고 → 나이스');
-  body.append(el('div', 'margin-bottom:8px', found.length ? '입력할 화면을 고르세요. (조회된 화면만 보여요)' : '나이스에서 입력 화면을 열고 조회한 뒤 다시 눌러 주세요.'));
-  for (const { sc, a } of found) {
+  body.append(el('div', 'margin-bottom:8px', '지금 보고 있는 화면에 넣을 수 있어요.'));
+  for (const sc of SCREENS) {
+    const inst = running.filter((a) => a.app && sc.re.test(a.app.id));
+    let a = inst.find((x) => shown(x, sc.grid)) || null;
+    let rows = 0;
+    try { if (a) rows = a.lookup(sc.ds).getRowCount(); } catch (_) {}
+    let why = '';
+    if (!inst.length) why = '나이스에서 이 화면을 열고 조회해 주세요';
+    else if (!a) why = '이 화면 탭으로 이동하면 쓸 수 있어요';
+    else if (!rows) why = '조회를 눌러 학생 목록을 불러와 주세요';
     // 저장 안 된 변경(새 줄·수정·삭제)이 있으면 함께 알려 준다
     let dirty = 0;
-    try { const d = a.lookup(sc.re.test('els_sdlbg00_m01') ? 'dsGicRecStu' : sc.ds); for (let r = 0; r < d.getRowCount(); r++) if (d.getRowState(r) !== 1) dirty++; } catch (_) {}
-    const b = el('button', 'display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid #b77a00;background:#fff7e6;font-weight:700;cursor:pointer', sc.label + (dirty ? '  ⚠ 저장 안 된 변경 ' + dirty + '칸' : '  · 저장 안 된 변경 없음'));
-    b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
+    for (const x of inst) { try { const d = x.lookup(sc.dirtyDs || sc.ds); for (let r = 0; r < d.getRowCount(); r++) if (d.getRowState(r) !== 1) dirty++; } catch (_) {} }
+    const on = !why;
+    const b = el('button', `display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid ${on ? '#b77a00' : '#ccc'};background:${on ? '#fff7e6' : '#f4f4f4'};color:${on ? '#222' : '#999'};font-weight:700;cursor:${on ? 'pointer' : 'default'}`);
+    b.append(el('div', null, sc.label), el('div', `font-weight:400;font-size:12px;color:${dirty ? '#b3261e' : '#888'}`, (why ? why : '누르면 시작해요') + (dirty ? ` · ⚠ 저장 안 된 변경 ${dirty}칸` : '')));
+    b.disabled = !on;
+    if (on) b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
     body.append(b);
   }
   const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
