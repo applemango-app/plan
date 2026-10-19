@@ -564,24 +564,26 @@
       body.append(el('div', 'margin:8px 0;padding:8px;background:#f7f7f7;border-radius:8px;white-space:pre-line', lines.join('\n')));
       const list = el('div', 'margin:8px 0;font-size:13px;max-height:180px;overflow:auto;border:1px solid #eee;border-radius:8px;padding:6px');
       const msg = el('div', 'margin:8px 0;font-weight:700;white-space:pre-line');
-      const go = el('button', 'padding:8px 14px;border-radius:8px;border:0;background:#1f7a3a;color:#fff;font-weight:700;cursor:pointer');
-      body.append(list, msg, go);
-      let idx = 0;
+      const btnStyle = (bg) => `margin:4px 6px 4px 0;padding:8px 14px;border-radius:8px;border:0;background:${bg};color:#fff;font-weight:700;cursor:pointer`;
+      const one = el('button', btnStyle('#8a6d00'));
+      const allBtn = el('button', btnStyle('#1f7a3a'), '전체 학생 넣기 (학생마다 자동 저장)');
+      const confirmBox = el('div', 'display:none;margin:8px 0;padding:10px;border:2px solid #1f7a3a;border-radius:8px;background:#f2fbf4');
+      const stop = el('button', btnStyle('#b3261e') + ';display:none', '멈추기');
+      body.append(list, msg, one, allBtn, stop, confirmBox);
+      let idx = 0, running = false, stopReq = false;
+      const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? '#b3261e' : '#222'; };
       const drawList = () => {
         list.textContent = '';
         for (const n of todo) list.append(el('div', `padding:2px 4px;${n === todo[idx] ? 'background:#fff7e6;font-weight:700' : ''}`, `${n}번 · ${byNo.get(n).length}건 · ${status.get(n)}`));
-        go.textContent = idx < todo.length ? `${todo[idx]}번 학생 기록 넣기` : '모두 끝났어요';
-        go.disabled = idx >= todo.length;
-        go.style.opacity = go.disabled ? 0.5 : 1;
+        one.textContent = idx < todo.length ? `${todo[idx]}번 학생만 넣기 (저장은 직접)` : '모두 끝났어요';
+        one.disabled = allBtn.disabled = running || idx >= todo.length;
+        one.style.opacity = allBtn.style.opacity = one.disabled ? 0.5 : 1;
+        stop.style.display = running ? 'inline-block' : 'none';
       };
-      go.onclick = async () => {
-        const no = todo[idx];
-        if (dirtyRows()) { msg.textContent = '⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]을 누른 뒤 다시 눌러 주세요.'; msg.style.color = '#b3261e'; return; }
-        if (idx > 0 && status.get(todo[idx - 1]).startsWith('넣음')) status.set(todo[idx - 1], status.get(todo[idx - 1]).replace('넣음', '저장됨 ✓'));
-        go.disabled = true;
-        msg.style.color = '#222';
-        msg.textContent = `${no}번 학생을 고르는 중…`;
-        if (!(await selectStudent(no))) { msg.textContent = `⚠ ${no}번 학생 기록을 불러오지 못했어요. 학생 목록에서 ${no}번을 직접 클릭한 뒤 다시 눌러 주세요.`; msg.style.color = '#b3261e'; go.disabled = false; return; }
+
+      // 한 학생: 고르고, 없는 기록만 행추가로 넣는다. 저장은 하지 않는다.
+      async function fillStudent(no) {
+        if (!(await selectStudent(no))) return { err: `${no}번 학생 기록을 불러오지 못했어요` };
         const have = new Set();
         for (let r = 0; r < rec.getRowCount(); r++) have.add(recKey(String(rec.getValue(r, 'ghvrDevEnfcYmd') || ''), rec.getValue(r, 'ghvrDevCn')));
         let added = 0, skipped = 0;
@@ -589,7 +591,7 @@
           if (have.has(recKey(x.date, x.text))) { skipped++; continue; }
           const before = rec.getRowCount();
           app.lookup('btnAdd').click();
-          if (rec.getRowCount() <= before) { msg.textContent = '⚠ 행추가가 되지 않았어요. 멈출게요.'; msg.style.color = '#b3261e'; return; }
+          if (rec.getRowCount() <= before) return { err: `${no}번 행추가가 되지 않았어요` };
           const r = rec.getRowCount() - 1;
           rec.setValue(r, 'ghvrDevEnfcYmd', x.date);
           rec.setValue(r, 'ghvrDevCn', x.text);
@@ -597,13 +599,83 @@
           added++;
         }
         try { app.lookup('grdGicRecStu').redraw(); } catch (_) {}
-        status.set(no, added ? `넣음 ${added}건${skipped ? ` (이미 있음 ${skipped}건)` : ''}` : `모두 이미 있음 (${skipped}건)`);
+        return { added, skipped, total: rec.getRowCount() };
+      }
+
+      // 저장 누르기 → '저장되었습니다' 알림의 [확인]을 눌러 닫기 → 모든 줄이 저장된 상태인지 확인
+      async function saveNow(expected) {
+        const P = cpr.core.Platform.INSTANCE;
+        const known = new Set(P.getAllRunningAppInstances());
+        app.lookup('btnSaveStu').click();
+        const t0 = Date.now();
+        let closed = 0;
+        while (Date.now() - t0 < 20000) {
+          await new Promise((r) => setTimeout(r, 250));
+          for (const inst of P.getAllRunningAppInstances()) {
+            if (known.has(inst)) continue;
+            let ok = null;
+            try { ok = inst.getContainer().getAllRecursiveChildren().find((c) => c.type === 'button' && String(c.value || '').trim() === '확인'); } catch (_) {}
+            if (!ok) continue;
+            let text = '';
+            try { text = inst.getContainer().getAllRecursiveChildren().filter((c) => c.type === 'output').map((c) => String(c.value || '')).join(' '); } catch (_) {}
+            if (!/저장되었습니다/.test(text)) return { err: '나이스 알림: ' + (text.trim().slice(0, 80) || '(내용 없음)') + ' — 알림을 확인하고 닫아 주세요' };
+            try { ok.click(); closed++; } catch (_) {}
+            known.add(inst);
+          }
+          if (closed && dirtyRows() === 0 && rec.getRowCount() >= expected) return { ok: true };
+        }
+        return { err: closed ? '저장 뒤 목록이 바뀌지 않았어요' : "'저장되었습니다' 알림을 찾지 못했어요 — 화면을 확인해 주세요" };
+      }
+
+      one.onclick = async () => {
+        if (dirtyRows()) return say('⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]을 누른 뒤 다시 눌러 주세요.', true);
+        if (idx > 0 && status.get(todo[idx - 1]).startsWith('넣음')) status.set(todo[idx - 1], status.get(todo[idx - 1]).replace('넣음', '저장됨 ✓'));
+        const no = todo[idx];
+        running = true; drawList(); say(`${no}번 학생을 고르는 중…`);
+        const r = await fillStudent(no);
+        running = false;
+        if (r.err) { drawList(); return say('⚠ ' + r.err + `. 학생 목록에서 ${no}번을 직접 클릭한 뒤 다시 눌러 주세요.`, true); }
+        status.set(no, r.added ? `넣음 ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}` : `모두 이미 있음 (${r.skipped}건)`);
         idx++;
-        msg.textContent = added
-          ? `✔ ${no}번에 ${added}건을 넣었어요. 화면에서 확인하고 나이스 [저장]을 누른 뒤, 아래 버튼으로 다음 학생으로 가세요.`
-          : `${no}번은 넣을 기록이 없어요(모두 이미 있음). 다음 학생으로 가세요.`;
+        say(r.added ? `✔ ${no}번에 ${r.added}건을 넣었어요. 화면에서 확인하고 나이스 [저장]을 누른 뒤 다음 학생으로 가세요.` : `${no}번은 넣을 기록이 없어요(모두 이미 있음).`);
         drawList();
       };
+
+      allBtn.onclick = () => {
+        if (dirtyRows()) return say('⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]이나 [조회]를 먼저 눌러 주세요.', true);
+        const rest = todo.slice(idx);
+        const cnt = rest.reduce((a, n) => a + byNo.get(n).length, 0);
+        confirmBox.textContent = '';
+        confirmBox.style.display = 'block';
+        const yes = el('button', btnStyle('#1f7a3a'), '시작');
+        const no = el('button', btnStyle('#777'), '취소');
+        confirmBox.append(el('div', 'margin-bottom:6px', `학생 ${rest.length}명의 기록 최대 ${cnt}건을 넣고, 학생마다 나이스에 저장해요. 이미 있는 기록은 건너뛰어요. 시작할까요?`), yes, no);
+        no.onclick = () => { confirmBox.style.display = 'none'; };
+        yes.onclick = async () => {
+          confirmBox.style.display = 'none';
+          running = true; stopReq = false; drawList();
+          let addedAll = 0;
+          while (idx < todo.length) {
+            if (stopReq) { say(`멈췄어요. 여기까지 저장했어요. (${idx}/${todo.length}명)`); break; }
+            const n = todo[idx];
+            say(`${n}번 진행 중… (${idx + 1}/${todo.length}명)`);
+            const r = await fillStudent(n);
+            if (r.err) { say('⚠ ' + r.err + '. 여기서 멈췄어요.', true); break; }
+            if (r.added) {
+              const s = await saveNow(r.total);
+              if (s.err) { status.set(n, `넣음 ${r.added}건 · 저장 확인 안 됨`); say(`⚠ ${n}번 저장 중 멈췄어요: ${s.err}`, true); drawList(); break; }
+              status.set(n, `저장됨 ✓ ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}`);
+              addedAll += r.added;
+            } else status.set(n, `모두 이미 있음 (${r.skipped}건)`);
+            idx++;
+            drawList();
+          }
+          running = false;
+          if (idx >= todo.length) say(`✔ 끝났어요. 학생 ${todo.length}명, 새 기록 ${addedAll}건을 저장했어요.`);
+          drawList();
+        };
+      };
+      stop.onclick = () => { stopReq = true; say('지금 학생까지 마치고 멈출게요…'); };
       drawList();
     });
     document.body.appendChild(panel);
