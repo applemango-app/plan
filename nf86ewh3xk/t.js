@@ -588,19 +588,16 @@
       // 한 학생: 고르고, 없는 기록만 행추가로 넣는다. 저장은 하지 않는다.
       async function fillStudent(no) {
         if (!(await selectStudent(no))) return { err: `${no}번 학생 기록을 불러오지 못했어요` };
-        const exact = new Map(), sameText = new Map();
-        const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+        // 날짜와 내용이 모두 같은 기록만 이미 있는 것으로 본다(같은 문구를 다른 날 또 쓴 기록은 새로 넣는다)
+        const exact = new Map();
         for (let r = 0; r < rec.getRowCount(); r++) {
-          bump(exact, recKey(String(rec.getValue(r, 'ghvrDevEnfcYmd') || ''), rec.getValue(r, 'ghvrDevCn')));
-          bump(sameText, norm(rec.getValue(r, 'ghvrDevCn')));
+          const k = recKey(String(rec.getValue(r, 'ghvrDevEnfcYmd') || ''), rec.getValue(r, 'ghvrDevCn'));
+          exact.set(k, (exact.get(k) || 0) + 1);
         }
-        const take = (m, k) => { const n = m.get(k) || 0; if (!n) return false; m.set(k, n - 1); return true; };
-        const mine = byNo.get(no);
-        const need = [];
+        const take = (k) => { const n = exact.get(k) || 0; if (!n) return false; exact.set(k, n - 1); return true; };
         let skipped = 0;
-        for (const x of mine) if (take(exact, recKey(x.date, x.text))) { take(sameText, norm(x.text)); skipped++; } else need.push(x);
         const toAdd = [];
-        for (const x of need) if (take(sameText, norm(x.text))) skipped++; else toAdd.push(x);
+        for (const x of byNo.get(no)) if (take(recKey(x.date, x.text))) skipped++; else toAdd.push(x);
         let added = 0;
         const addedDates = [];
         for (const x of toAdd) {
