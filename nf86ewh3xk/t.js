@@ -297,7 +297,7 @@
       table.textContent = '';
       const t = el('table', 'width:100%;border-collapse:collapse;font-size:13px');
       const hr = el('tr');
-      ['나이스 영역', '평가요소', '엑셀 열'].forEach((h) => hr.append(el('th', 'text-align:left;border-bottom:1px solid #ccc;padding:4px', h)));
+      ['나이스 영역', '평가요소', '짝지은 엑셀 평가 · 엑셀 단계'].forEach((h) => hr.append(el('th', 'text-align:left;border-bottom:1px solid #ccc;padding:4px', h)));
       t.append(hr);
       neis.items.forEach((it, i) => {
         const tr = el('tr');
@@ -306,8 +306,18 @@
         const none = el('option', null, '— 넣지 않음 —'); none.value = -1; sel.append(none);
         sheet.columns.forEach((c, ci) => { const o = el('option', null, `${c.area} · ${c.label}${c.criteria ? ` · ${c.criteria}` : ''}`); o.value = ci; sel.append(o); });
         sel.value = choice[i];
-        sel.onchange = () => { choice[i] = Number(sel.value); update(); };
-        const td = el('td', 'padding:4px;border-bottom:1px solid #eee'); td.append(sel); tr.append(td);
+        // 고른 열에 학생들의 단계가 몇 명씩 있는지 아래에 보여 준다(짝이 맞는지 눈으로 확인)
+        const dist = el('div', 'font-size:12px;color:#555;margin-top:2px');
+        const showDist = () => {
+          const ci = choice[i];
+          if (ci == null || ci < 0) { dist.textContent = ''; return; }
+          const count = new Map();
+          for (const stu of sheet.students.values()) { const v = stu.levels[ci] || '(빈칸)'; count.set(v, (count.get(v) || 0) + 1); }
+          dist.textContent = [...count].map(([k, n]) => `${k} ${n}`).join(' · ');
+        };
+        sel.onchange = () => { choice[i] = Number(sel.value); showDist(); update(); };
+        showDist();
+        const td = el('td', 'padding:4px;border-bottom:1px solid #eee'); td.append(sel, dist); tr.append(td);
         t.append(tr);
       });
       table.append(t);
