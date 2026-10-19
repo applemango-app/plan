@@ -303,7 +303,8 @@
         const r0 = {};
         for (const c of cols) {
           const v = ds.getValue(0, c);
-          r0[c] = v == null ? null : PERSONAL.test(c) ? `[${String(v).length}자]` : typeof v === 'number' ? v : String(v).length > 30 ? `[${String(v).length}자]` : v;
+          // 번호처럼 숫자 1~3자리는 그대로 보여 준다(어느 열이 번호인지 찾기 위해)
+          r0[c] = v == null ? null : /^\d{1,3}$/.test(String(v)) ? String(v) : PERSONAL.test(c) ? `[${String(v).length}자]` : typeof v === 'number' ? v : String(v).length > 30 ? `[${String(v).length}자]` : v;
         }
         let detail = null;
         try { detail = [...Array(g.detail.cellCount).keys()].map((i) => { const cell = g.detail.getColumn(i); const ctl = cell && cell.control; return { col: cell && cell.columnName, ctrl: ctl && ctl.type, maxLength: ctl && ctl.maxLength }; }); } catch (_) {}
