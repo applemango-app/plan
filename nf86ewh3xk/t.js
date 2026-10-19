@@ -823,8 +823,10 @@ ${sv.err}
       for (const { sc, a, why, dirty } of st) {
         const on = !why;
         const b = el('button', `display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid ${on ? '#b77a00' : '#ccc'};background:${on ? '#fff7e6' : '#f4f4f4'};color:${on ? '#222' : '#999'};font-weight:700;cursor:${on ? 'pointer' : 'default'}`);
-        b.append(el('div', null, sc.label), rich('div', `font-weight:400;font-size:12px;white-space:pre-line;line-height:22px;color:${dirty ? '#b3261e' : '#888'}`,
-          (why || '[조회]를 눌러 주세요') + (dirty ? `\n⚠ 입력했지만 아직 [저장]하지 않은 칸이 ${dirty}개 있어요. 저장하거나 [조회]로 지워 주세요.` : '')));
+        // 켜져 있으면 안내 없이 이름만(저장 안 한 칸이 있을 때만 빨간 경고)
+        const note = [why, dirty ? `⚠ 입력했지만 아직 [저장]하지 않은 칸이 ${dirty}개 있어요. 저장하거나 [조회]로 지워 주세요.` : ''].filter(Boolean).join('\n');
+        b.append(el('div', null, sc.label));
+        if (note) b.append(rich('div', `font-weight:400;font-size:12px;white-space:pre-line;line-height:22px;color:${dirty ? '#b3261e' : '#888'}`, note));
         b.disabled = !on;
         if (on) b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
         list.append(b);
