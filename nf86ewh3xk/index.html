@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>애플망고 나이스 버튼 시험</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; line-height: 1.7; color: #222; background: #fff; }
+  h1 { font-size: 22px; }
+  .btn { display: inline-block; margin: 16px 0; padding: 12px 22px; background: #f2a516; color: #222; font-weight: 700; border-radius: 10px; text-decoration: none; cursor: grab; border: 2px dashed #b77a00; }
+  ol li { margin-bottom: 8px; }
+  .note { color: #666; font-size: 14px; }
+  kbd { background: #eee; border-radius: 4px; padding: 1px 6px; border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+<h1>애플망고 나이스 버튼 (시험판)</h1>
+<p>아래 버튼을 <b>브라우저 위쪽 즐겨찾기 줄로 끌어다 놓으세요.</b></p>
+<a class="btn" id="bm" href="#">🥭 애플망고 나이스</a>
+<ol>
+  <li>즐겨찾기 줄이 안 보이면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>를 누르세요.</li>
+  <li>버튼을 마우스로 잡고 즐겨찾기 줄에 놓으세요. (이 페이지에서 누르는 게 아니에요.)</li>
+  <li>나이스 화면에서 즐겨찾기 줄의 <b>🥭 애플망고 나이스</b>를 누르세요.</li>
+  <li>화면 위쪽에 초록색 "✔ 애플망고 연결됨" 띠가 나오면 성공이에요.</li>
+</ol>
+<p class="note">시험판은 화면 제목과 안내 띠만 바꿔요. 나이스의 값은 읽거나 바꾸지 않아요.</p>
+<script>
+  // 즐겨찾기에는 불러오기 한 줄만 넣고, 실제 스크립트는 이 사이트에서 매번 새로 받아 온다.
+  var src = new URL('t.js', location.href).href;
+  var code = "(function(){var s=document.createElement('script');s.src='" + src + "?v='+Date.now();document.body.appendChild(s);})();";
+  var a = document.getElementById('bm');
+  a.href = 'javascript:' + code;
+  a.addEventListener('click', function (e) { e.preventDefault(); });
+</script>
+</body>
+</html>
