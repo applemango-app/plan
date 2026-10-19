@@ -421,7 +421,7 @@
       el('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
   }
 
-  // ---------- 교과 문구 · 행동특성: 학생마다 글 칸 하나 ----------
+  // ---------- 학기말 종합의견 · 행동특성: 학생마다 글 칸 하나 ----------
   const TEXT_SCREENS = {
     subjText: { ds: 'dsMain', keyCol: 'stdntCn', nameCol: 'stdntNm', textCol: 'gnrlzOpiCn', subjCol: 'sbjtCdNm', grid: 'grdMain' },
     behavior: { ds: 'dsScrgRec', keyCol: 'clsNo', nameCol: 'stuFlnm', textCol: 'gnrlzOpiCn', grid: 'grdMain' },
@@ -549,7 +549,7 @@
   // ---------- 시작: 열린 화면 고르기 ----------
   const SCREENS = [
     { re: /els_scres00_m02$/, ds: 'dsMain', label: '교과별 평가 (단계)', open: (a) => openPanel(a) },
-    { re: /els_scres10_m00$/, ds: 'dsMain', label: '교과 문구 (교과별 종합의견)', open: (a) => openTextPanel(a, 'subjText', '교과 문구') },
+    { re: /els_scres10_m00$/, ds: 'dsMain', label: '학기말 종합의견 (과목별)', open: (a) => openTextPanel(a, 'subjText', '학기말 종합의견') },
     { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', label: '행동특성 및 종합의견', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
     { re: /els_sdlbg00_m01$/, ds: 'dsStu', label: '누가기록 (시험)', open: (a) => openRecordPanel(a) },
   ];
