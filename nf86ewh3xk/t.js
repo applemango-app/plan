@@ -289,12 +289,51 @@
     over.append(overBox, document.createTextNode(' 이미 입력된 단계도 엑셀 값으로 바꾸기'));
     const summary = el('div', 'margin:8px 0;padding:8px;background:#f7f7f7;border-radius:8px;white-space:pre-line');
     const go = el('button', 'padding:8px 14px;border-radius:8px;border:0;background:#1f7a3a;color:#fff;font-weight:700;cursor:pointer', '나이스 화면에 채우기');
-    body.append(sheetRow, table, over, summary, go);
+    // 나이스에서 교과를 바꿔 [조회]했을 때: 고른 파일은 그대로 두고 나이스 화면만 다시 읽는다
+    const reread = el('button', 'margin-left:6px;padding:8px 14px;border-radius:8px;border:1px solid #2f6bff;background:#fff;color:#2f6bff;font-weight:700;cursor:pointer;display:none', '나이스 화면 다시 읽기');
+    reread.onclick = () => {
+      const fresh = readNeis(app);
+      if (!fresh.rows.length) return banner('나이스에서 교과를 고르고 [조회]를 먼저 눌러 주세요', '#b3261e');
+      const titleEl = [...panel.firstChild.children].find((c) => c.tagName === 'DIV');
+      if (titleEl) titleEl.textContent = `🥭 교과별 평가 · ${fresh.subject} (학생 ${fresh.numbers.size}명 · 평가 ${fresh.items.length}개)`;
+      showMatch(app, fresh, sheets, panel, body, fileName);
+    };
+    body.append(sheetRow, table, over, summary, go, reread);
     let choice = [];
+    const sheetOk = () => norm(sheets[si].name).startsWith(subj);
+    // 창을 연 뒤 나이스에서 교과를 바꿔 조회했으면 줄 위치가 달라져 채우면 안 된다
+    const neisChanged = () => {
+      try { const d = app.lookup('dsMain'); return d.getRowCount() !== neis.rows.length || (d.getRowCount() > 0 && d.getValue(0, 'sbjtNm') !== neis.subject); } catch (_) { return true; }
+    };
+    const block = (msg) => {
+      setRich(summary, msg);
+      summary.style.color = '#b3261e';
+      go.disabled = true;
+      go.style.opacity = 0.5;
+      reread.style.display = 'inline-block';
+    };
 
     const render = () => {
       const sheet = sheets[si].parsed;
       table.textContent = '';
+      if (!sheetOk()) {
+        // 다른 과목 시트: 그 시트의 평가와 단계만 보여 주고, 채우기는 막는다
+        const t = el('table', 'width:100%;border-collapse:collapse;font-size:13px');
+        const hr = el('tr');
+        ['엑셀 영역', '평가', '엑셀 단계'].forEach((h) => hr.append(el('th', 'text-align:left;border-bottom:1px solid #ccc;padding:4px', h)));
+        t.append(hr);
+        sheet.columns.forEach((c, ci) => {
+          const count = new Map();
+          for (const stu of sheet.students.values()) { const v = stu.levels[ci] || '(빈칸)'; count.set(v, (count.get(v) || 0) + 1); }
+          const td = (x) => el('td', 'padding:4px;border-bottom:1px solid #eee', x);
+          const tr = el('tr');
+          tr.append(td(c.area), td(c.label + (c.criteria ? ` · ${c.criteria}` : '')), td([...count].map(([k, n]) => `${k} ${n}`).join(' · ')));
+          t.append(tr);
+        });
+        table.append(t);
+        block(`⚠ 고른 시트는 '${sheets[si].name}'인데, 나이스 화면의 교과는 '${neis.subject}'예요.\n나이스에서 교과를 바꾸고 [조회]를 누른 뒤 [나이스 화면 다시 읽기]를 눌러 주세요.`);
+        return;
+      }
       const t = el('table', 'width:100%;border-collapse:collapse;font-size:13px');
       const hr = el('tr');
       ['나이스 영역', '평가요소', '짝지은 엑셀 평가 · 엑셀 단계'].forEach((h) => hr.append(el('th', 'text-align:left;border-bottom:1px solid #ccc;padding:4px', h)));
@@ -325,6 +364,10 @@
     };
     let current = null;
     const update = () => {
+      if (!sheetOk()) return;
+      if (neisChanged()) return block('⚠ 이 창을 연 뒤 나이스 화면이 바뀌었어요(교과 변경이나 [조회]). [나이스 화면 다시 읽기]를 눌러 주세요.');
+      summary.style.color = '';
+      reread.style.display = 'none';
       const sheet = sheets[si].parsed;
       current = plan(neis, sheet, choice, overBox.checked);
       const s = current.stats.reduce((a, x) => { for (const k in x) a[k] = (a[k] || 0) + x[k]; return a; }, {});
@@ -336,14 +379,15 @@
       if (current.nameMismatch.length) lines.push(`⚠ 이름이 다른 번호: ${current.nameMismatch.join(', ')} — 다른 반 파일인지 확인하세요`);
       const unmatched = choice.filter((c) => c < 0).length;
       if (unmatched) lines.push(`엑셀 열을 정하지 않은 평가 ${unmatched}개 (위 표에서 골라 주세요)`);
-      summary.textContent = lines.join('\n');
+      setRich(summary, lines.join('\n'));
       go.disabled = !current.changes.length;
       go.style.opacity = go.disabled ? 0.5 : 1;
     };
     sheetSel.onchange = () => { si = Number(sheetSel.value); choice = autoMatch(neis.items, sheets[si].parsed.columns); render(); };
     overBox.onchange = update;
     go.onclick = () => {
-      if (!current || !current.changes.length) return;
+      if (!current || !current.changes.length || !sheetOk()) return;
+      if (neisChanged()) return update();
       apply(app, neis, current.changes);
       body.textContent = '';
       body.append(el('div', 'font-size:15px;font-weight:700;color:#1f7a3a;margin-bottom:6px', `✔ ${current.changes.length}칸을 채웠어요.`),
