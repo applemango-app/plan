@@ -376,10 +376,12 @@
   }
 
   // ---------- 공통 패널 ----------
-  // 제목 줄: [←(메뉴로)] 제목 ………… [—(접기)] [✕(닫기)]. 제목 줄을 끌어 옮긴다. 옮긴 위치는 다음 창에도 쓴다.
+  // 제목 줄: [←(메뉴로)] 제목 ………… [—(내리기)] [✕(닫기)]. 제목 줄을 끌어 옮긴다. 옮긴 위치는 다음 창에도 쓴다.
+  // [—]는 창을 숨기고 오른쪽 아래 🥭 버튼만 남긴다. 🥭를 누르면 하던 그대로 창이 다시 뜬다.
   let lastPos = null;
   function makePanel(title, isMenu) {
     document.getElementById(PANEL_ID)?.remove();
+    showFab(false);
     const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:520px;max-height:70vh;display:flex;flex-direction:column;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #e8890c;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);overflow:hidden');
     panel.id = PANEL_ID;
     if (lastPos) Object.assign(panel.style, { left: lastPos.left, top: lastPos.top, right: 'auto', bottom: 'auto' });
@@ -387,18 +389,13 @@
     const icon = (t, tip) => { const b = el('button', 'width:28px;height:28px;flex:none;border:0;border-radius:6px;background:rgba(255,255,255,.18);color:#fff;font:700 15px/1 sans-serif;cursor:pointer;padding:0', t); b.title = tip; b.onmousedown = (e) => e.stopPropagation(); return b; };
     if (!isMenu) { const back = icon('←', '메뉴로'); back.onclick = () => openMenu(); head.append(back); }
     head.append(el('div', 'flex:1;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', title));
-    const fold = icon('—', '접기');
+    const fold = icon('—', '내리기 (🥭 버튼으로)');
     const close = icon('✕', '닫기');
     head.append(fold, close);
     const body = el('div', 'padding:12px 16px;overflow:auto');
     panel.append(head, body);
     close.onclick = () => panel.remove();
-    fold.onclick = () => {
-      const folded = body.style.display !== 'none';
-      body.style.display = folded ? 'none' : '';
-      fold.textContent = folded ? '□' : '—';
-      fold.title = folded ? '펴기' : '접기';
-    };
+    fold.onclick = () => { panel.style.display = 'none'; showFab(true); };
     head.onmousedown = (e) => {
       const r = panel.getBoundingClientRect();
       const dx = e.clientX - r.left, dy = e.clientY - r.top;
@@ -840,18 +837,22 @@ ${sv.err}
     document.body.appendChild(panel);
   }
 
-  // 오른쪽 아래 🥭 버튼: 즐겨찾기를 다시 누르지 않아도 메뉴를 연다(페이지를 새로 고치기 전까지). 다시 불러오면 새것으로 바꾼다.
+  // 오른쪽 아래 🥭 버튼: 창의 [—]를 눌렀을 때만 보인다. 누르면 숨긴 창을 하던 그대로 다시 띄운다(창이 없으면 메뉴).
   document.getElementById('applemango-fab')?.remove();
-  const fabWrap = el('div', 'position:fixed;right:20px;bottom:44px;z-index:2147483645');
+  const fabWrap = el('div', 'position:fixed;right:20px;bottom:44px;z-index:2147483645;display:none');
   fabWrap.id = 'applemango-fab';
   const fab = el('button', 'padding:10px 18px;border-radius:24px;border:3px solid #fff;background:#e8890c;color:#fff;font:700 16px/1 "Malgun Gothic",sans-serif;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45)', '🥭 애플망고');
-  fab.title = '애플망고 메뉴 열기';
-  fab.onclick = () => openMenu();
+  fab.title = '애플망고 창 다시 열기';
+  fab.onclick = () => {
+    const p = document.getElementById(PANEL_ID);
+    if (p) { p.style.display = 'flex'; showFab(false); } else openMenu();
+  };
   // 오른쪽 위 작은 X: 애플망고 버튼과 열린 창을 모두 닫는다(다시 쓰려면 즐겨찾기를 누른다)
   const x = el('button', 'position:absolute;top:-10px;right:-10px;width:24px;height:24px;border-radius:50%;border:2px solid #fff;background:#555;color:#fff;font:700 12px/1 sans-serif;cursor:pointer;padding:0', '✕');
   x.title = '애플망고 닫기';
   x.onclick = () => { document.getElementById(PANEL_ID)?.remove(); fabWrap.remove(); };
   fabWrap.append(fab, x);
   document.body.appendChild(fabWrap);
+  function showFab(on) { fabWrap.style.display = on ? 'block' : 'none'; }
   openMenu();
 })();
