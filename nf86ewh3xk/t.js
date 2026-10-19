@@ -213,6 +213,19 @@
 
   // ---------- 화면 띠·패널 ----------
   function el(tag, style, text) { const e = document.createElement(tag); if (style) e.style.cssText = style; if (text != null) e.textContent = text; return e; }
+  // 글 속 '[조회]'를 나이스 조회 버튼 모양(흰 바탕·파란 테두리·돋보기)으로 그린다. 선생님이 화면에서 바로 찾을 수 있게.
+  function setRich(e, text) {
+    e.textContent = '';
+    for (const part of String(text).split(/(\[조회\])/)) {
+      if (part !== '[조회]') { if (part) e.append(part); continue; }
+      const chip = el('span', 'display:inline-flex;align-items:center;gap:3px;margin:0 2px;padding:1px 8px 1px 6px;border:1px solid #2f6bff;border-radius:4px;background:#fff;color:#222;font-weight:700;font-size:12px;line-height:18px;vertical-align:middle;white-space:nowrap');
+      chip.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#2f6bff" stroke-width="2"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4" stroke-linecap="round"/></svg>';
+      chip.append('조회');
+      e.append(chip);
+    }
+    return e;
+  }
+  const rich = (tag, style, text) => setRich(el(tag, style), text);
   function banner(msg, color) {
     const d = el('div', `position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;background:${color};color:#fff;font:600 15px/1.4 sans-serif;padding:10px 18px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.25);cursor:pointer`, msg);
     d.onclick = () => d.remove();
@@ -222,7 +235,7 @@
 
   function openPanel(app) {
     const neis = readNeis(app);
-    if (!neis.rows.length) return banner('먼저 과목을 고르고 조회를 눌러 주세요', '#b3261e');
+    if (!neis.rows.length) return banner('먼저 과목을 고르고 나이스 [조회] 버튼을 눌러 주세요', '#b3261e');
     const { panel, body } = makePanel(`🥭 교과별 평가 · ${neis.subject} (학생 ${neis.numbers.size}명 · 평가 ${neis.items.length}개)`);
     const pick = el('button', 'padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '애플망고 결과 엑셀 고르기');
     body.append(el('div', 'margin-bottom:8px', '앱에서 내보낸 수행평가 결과 엑셀(.xlsx)을 고르세요. 파일은 이 컴퓨터 안에서만 읽어요.'), pick);
@@ -313,7 +326,7 @@
       apply(app, neis, current.changes);
       body.textContent = '';
       body.append(el('div', 'font-size:15px;font-weight:700;color:#1f7a3a;margin-bottom:6px', `✔ ${current.changes.length}칸을 채웠어요.`),
-        el('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
+        rich('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
     };
     choice = autoMatch(neis.items, sheets[si].parsed.columns);
     render();
@@ -430,7 +443,7 @@
   function done(body, msg) {
     body.textContent = '';
     body.append(el('div', 'font-size:15px;font-weight:700;color:#1f7a3a;margin-bottom:6px', msg),
-      el('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
+      rich('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
   }
 
   // ---------- 학기말 종합의견 · 행동특성: 학생마다 글 칸 하나 ----------
@@ -575,7 +588,7 @@
       const stop = el('button', btnStyle('#b3261e') + ';display:none', '멈추기');
       body.append(list, msg, one, allBtn, stop, confirmBox);
       let idx = 0, running = false, stopReq = false;
-      const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? '#b3261e' : '#222'; };
+      const say = (t, bad) => { setRich(msg, t); msg.style.color = bad ? '#b3261e' : '#222'; };
       const drawList = () => {
         list.textContent = '';
         for (const n of todo) list.append(el('div', `padding:2px 4px;${n === todo[idx] ? 'background:#fff7e6;font-weight:700' : ''}`, `${n}번 · ${byNo.get(n).length}건 · ${status.get(n)}`));
@@ -786,9 +799,9 @@ ${sv.err}
       let rows = 0;
       try { if (a) rows = a.lookup(sc.ds).getRowCount(); } catch (_) {}
       let why = '';
-      if (!inst.length) why = '나이스에서 이 화면을 열고 조회해 주세요';
+      if (!inst.length) why = '나이스에서 이 화면을 열고 [조회]를 눌러 주세요';
       else if (!a) why = '이 화면 탭으로 이동하면 쓸 수 있어요';
-      else if (!rows) why = '조회를 눌러 학생 목록을 불러와 주세요';
+      else if (!rows) why = '[조회]를 눌러 학생 목록을 불러와 주세요';
       // 입력했지만 저장하지 않은 줄(새 줄·수정·삭제)
       let dirty = 0;
       for (const x of inst) { try { const d = x.lookup(sc.dirtyDs || sc.ds); for (let r = 0; r < d.getRowCount(); r++) if (d.getRowState(r) !== 1) dirty++; } catch (_) {} }
@@ -798,7 +811,7 @@ ${sv.err}
 
   function openMenu() {
     const { panel, body } = makePanel('🥭 애플망고 → 나이스', true);
-    body.append(el('div', 'margin-bottom:8px', '지금 보고 있는 화면에 넣을 수 있어요. 나이스 화면을 바꾸면 버튼도 따라 바뀌어요.'));
+    body.append(rich('div', 'margin-bottom:8px;padding:8px 10px;background:#eef3ff;border-radius:8px', '나이스에서 넣을 화면을 열고 [조회]를 누르면 아래 버튼이 켜져요. 나이스 화면을 바꾸면 버튼도 따라 바뀌어요.'));
     const list = el('div');
     body.append(list);
     let sig = '';
@@ -811,7 +824,7 @@ ${sv.err}
       for (const { sc, a, why, dirty } of st) {
         const on = !why;
         const b = el('button', `display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid ${on ? '#b77a00' : '#ccc'};background:${on ? '#fff7e6' : '#f4f4f4'};color:${on ? '#222' : '#999'};font-weight:700;cursor:${on ? 'pointer' : 'default'}`);
-        b.append(el('div', null, sc.label), el('div', `font-weight:400;font-size:12px;white-space:pre-line;color:${dirty ? '#b3261e' : '#888'}`,
+        b.append(el('div', null, sc.label), rich('div', `font-weight:400;font-size:12px;white-space:pre-line;line-height:22px;color:${dirty ? '#b3261e' : '#888'}`,
           (why || '누르면 시작해요') + (dirty ? `\n⚠ 입력했지만 아직 [저장]하지 않은 칸이 ${dirty}개 있어요. 저장하거나 [조회]로 지워 주세요.` : '')));
         b.disabled = !on;
         if (on) b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
