@@ -311,6 +311,20 @@
         s.grids.push({ id: g.id, dataSet: ds.id, rowCount: ds.getRowCount(), cols, firstRow: r0, detail });
       }
       s.textareas = ctrls.filter((c) => c.type === 'textarea').map((t) => ({ id: t.id, maxLength: t.maxLength, len: String(t.value || '').length }));
+      // 행동발달·누가기록·교과 문구 화면은 표에 묶이지 않은 데이터(기록 목록 등)도 열 이름과 줄 수를 본다
+      if (/sdlbg|scres10/.test(app.app.id)) {
+        try {
+          s.dataSets = app.getAllDataControls().filter((d) => d.getColumnNames).map((d) => {
+            const cols = d.getColumnNames();
+            const n = d.getRowCount ? d.getRowCount() : null;
+            const sample = {};
+            if (n) for (const c of cols) { const v = d.getValue(0, c); sample[c] = v == null ? null : /^\d{1,3}$/.test(String(v)) || /^(19|20)\d{2}[-.]?\d{2}[-.]?\d{2}$/.test(String(v)) || /^[A-Z]{1,2}\d*$|^[YN]$/.test(String(v)) ? String(v) : `[${String(v).length}자]`; }
+            else if (n === null) for (const c of cols) { const v = d.getValue(c); sample[c] = v == null ? null : /^\d{1,8}$|^[YN]$/.test(String(v)) ? String(v) : `[${String(v).length}자]`; }
+            return { id: d.id, type: d.type, rowCount: n, cols, sample };
+          });
+        } catch (e) { s.dataSetsError = String(e.message); }
+        s.grids2 = ctrls.filter((c) => c && c.type === 'grid').map((g) => ({ id: g.id, dataSet: g.dataSet && g.dataSet.id, rows: g.dataSet && g.dataSet.getRowCount() }));
+      }
       if (s.grids.length || s.textareas.length) out.screens.push(s);
     }
     const a = el('a');
