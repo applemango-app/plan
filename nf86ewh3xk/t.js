@@ -512,6 +512,37 @@
         el('div', null, '목록 맨 아래에 10월 18일 "애플망고 시험 기록"이 보이면 성공이에요. 저장하지 말고 [조회]로 되돌려 주세요.'));
     };
     body.append(test);
+
+    // 학생 고르기 시험: 스크립트가 학생 목록에서 다른 학생을 골랐을 때 그 학생 기록이 불러와지는지 본다(읽기만).
+    const pickRow = el('div', 'margin-top:14px');
+    const numIn = el('input', 'width:60px;padding:4px;margin-right:6px');
+    numIn.type = 'number';
+    numIn.value = 15;
+    const pickBtn = el('button', 'padding:6px 12px;border-radius:8px;border:1px solid #b77a00;background:#fff7e6;font-weight:700;cursor:pointer', '번 학생 고르기 시험 (읽기만)');
+    pickRow.append(numIn, pickBtn);
+    body.append(pickRow);
+    pickBtn.onclick = async () => {
+      const want = Number(numIn.value);
+      let row = -1;
+      for (let r = 0; r < stu.getRowCount(); r++) if (Number(stu.getValue(r, 'clsNo')) === want) row = r;
+      if (row < 0) return banner('그 번호가 학생 목록에 없어요', '#b3261e');
+      const target = stu.getValue(row, 'stuInvlNo');
+      const g = app.lookup('grdStu');
+      const log = [];
+      const loaded = () => app.lookup('dmSearch').getValue('stuInvlNo') === target && (rec.getRowCount() === 0 || rec.getValue(0, 'stuInvlNo') === target);
+      const wait = async (ms) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (loaded()) return true; await new Promise((r) => setTimeout(r, 200)); } return loaded(); };
+      const tries = [
+        ['selectRows', () => g.selectRows([row])],
+        ['focusCell', () => g.focusCell(row, 1)],
+        ['clickCell', () => { const c = g.getCellElement ? g.getCellElement(row, 1) : null; if (!c) throw Error('셀 요소 없음'); c.click(); }],
+      ];
+      for (const [name, fn] of tries) {
+        try { fn(); log.push(name + ' 실행'); } catch (e) { log.push(name + ' 실패 ' + String(e.message).slice(0, 60)); continue; }
+        if (await wait(4000)) { log.push(`✔ ${name}로 ${want}번 기록 ${rec.getRowCount()}건 불러옴`); break; }
+        log.push(name + ' 뒤 4초 동안 안 불러와짐');
+      }
+      body.append(el('pre', 'white-space:pre-wrap;background:#f7f7f7;padding:8px;border-radius:8px;font-size:12px', log.join('\n')));
+    };
     document.body.appendChild(panel);
   }
 
