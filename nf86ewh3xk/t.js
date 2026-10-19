@@ -656,7 +656,7 @@
         confirmBox.style.display = 'block';
         const yes = el('button', btnStyle('#1f7a3a'), '시작');
         const no = el('button', btnStyle('#777'), '취소');
-        confirmBox.append(el('div', 'margin-bottom:6px', `학생 ${rest.length}명의 기록 최대 ${cnt}건을 넣고, 학생마다 나이스에 저장해요. 이미 있는 기록은 건너뛰어요. 시작할까요?`), yes, no);
+        confirmBox.append(el('div', 'margin-bottom:6px', `엑셀에 있는 학생 ${rest.length}명의 기록 ${cnt}건 중 나이스에 아직 없는 기록만 넣고, 학생마다 저장해요. (이미 있는 기록은 건너뛰어요) 시작할까요?`), yes, no);
         no.onclick = () => { confirmBox.style.display = 'none'; };
         yes.onclick = async () => {
           confirmBox.style.display = 'none';
