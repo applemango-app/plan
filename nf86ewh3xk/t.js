@@ -266,6 +266,8 @@
     panel.firstChild.addEventListener('click', (e) => { if (e.shiftKey) probeBtn.style.display = 'block'; });
     body.append(probeBtn);
     document.body.appendChild(panel);
+    // 앞 교과에서 고른 파일이 있으면 다시 고르지 않고 바로 쓴다
+    if (fileCache.grade) return showMatch(app, neis, fileCache.grade.sheets, panel, body, fileCache.grade.name);
 
     pick.onclick = () => {
       const input = el('input');
@@ -277,6 +279,7 @@
         try {
           const sheets = (await readXlsx(await f.arrayBuffer())).map((s) => ({ name: s.name, parsed: parseResultSheet(s.rows) })).filter((s) => s.parsed);
           if (!sheets.length) throw Error('애플망고 결과 시트를 찾지 못했어요');
+          fileCache.grade = { sheets, name: f.name };
           showMatch(app, neis, sheets, panel, body, f.name);
         } catch (e) { banner('⛔ ' + e.message, '#b3261e'); }
       };
@@ -288,7 +291,7 @@
     body.textContent = '';
     const subj = norm(neis.subject);
     let si = Math.max(0, sheets.findIndex((s) => norm(s.name).startsWith(subj)));
-    body.append(el('div', 'color:#666;margin-bottom:6px', '파일: ' + fileName));
+    body.append(fileLine(fileName, () => { delete fileCache.grade; openPanel(app); }));
     const sheetSel = el('select', 'margin:0 0 10px 6px;padding:4px');
     sheets.forEach((s, i) => { const o = el('option', null, s.name); o.value = i; sheetSel.append(o); });
     sheetSel.value = si;
@@ -402,8 +405,9 @@
       if (neisChanged()) return update();
       apply(app, neis, current.changes);
       body.textContent = '';
-      body.append(el('div', 'font-size:15px;font-weight:700;color:#1f7a3a;margin-bottom:6px', `✔ ${current.changes.length}칸을 채웠어요.`),
+      body.append(el('div', 'font-size:15px;font-weight:700;color:#1f7a3a;margin-bottom:6px', `✔ ${neis.subject} ${current.changes.length}칸을 채웠어요.`),
         rich('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
+      nextSubject(body, () => openPanel(app));
     };
     choice = autoMatch(neis.items, sheets[si].parsed.columns);
     render();
@@ -477,7 +481,8 @@
     if (lastPos) Object.assign(panel.style, { left: lastPos.left, top: lastPos.top, right: 'auto', bottom: 'auto' });
     const head = el('div', 'display:flex;align-items:center;gap:6px;padding:8px 10px;background:#e8890c;color:#fff;cursor:move;user-select:none');
     const icon = (t, tip) => { const b = el('button', 'width:28px;height:28px;flex:none;border:0;border-radius:6px;background:rgba(255,255,255,.18);color:#fff;font:700 15px/1 sans-serif;cursor:pointer;padding:0', t); b.title = tip; b.onmousedown = (e) => e.stopPropagation(); return b; };
-    if (!isMenu) { const back = icon('←', '메뉴로'); back.onclick = () => openMenu(); head.append(back); }
+    // ←: 보통은 메뉴로. 채우기를 마친 화면에서는 같은 파일로 과목 고르기로 돌아간다(panel.__back).
+    if (!isMenu) { const back = icon('←', '뒤로'); back.onclick = () => (panel.__back ? panel.__back() : openMenu()); head.append(back); }
     head.append(el('div', 'flex:1;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', title));
     const fold = icon('—', '내리기 (🥭 버튼으로)');
     const close = icon('✕', '닫기');
@@ -502,7 +507,28 @@
     };
     return { panel, body };
   }
-  function filePicker(body, hint, onSheets) {
+  // 한 번 고른 엑셀은 이 페이지를 새로 고치기 전까지 화면 종류별로 기억한다.
+  // 교과를 바꿔 창을 다시 열어도 파일을 다시 고르지 않는다. 파일은 이 컴퓨터의 메모리에만 있다.
+  const fileCache = {};
+  function fileLine(fileName, onRepick) {
+    const d = el('div', 'color:#666;margin-bottom:6px', '파일: ' + fileName);
+    const b = el('button', 'margin-left:8px;padding:2px 8px;border-radius:6px;border:1px solid #aaa;background:#fff;font-size:12px;cursor:pointer', '다른 파일 고르기');
+    b.onclick = onRepick;
+    d.append(b);
+    return d;
+  }
+  // 채운 뒤: 나이스에서 다음 교과로 바꿔 조회하면 같은 파일로 이어서 넣는다
+  function nextSubject(body, reopen) {
+    body.append(rich('div', 'margin-top:12px;padding:8px 10px;background:#eef3ff;border-radius:8px', '다음 교과: 나이스에서 [저장]한 뒤 교과를 바꾸고 [조회]를 누르고, 아래 버튼을 눌러 주세요. 같은 엑셀 파일로 이어서 넣어요.'));
+    const b = el('button', 'margin-top:8px;padding:8px 14px;border-radius:8px;border:0;background:#2f6bff;color:#fff;font-weight:700;cursor:pointer', '다음 교과 넣기');
+    b.onclick = reopen;
+    body.append(b);
+    body.parentElement.__back = reopen;
+  }
+  function filePicker(body, hint, onSheets, key) {
+    if (key && fileCache[key]) {
+      try { return onSheets(fileCache[key].sheets, fileCache[key].name); } catch (e) { delete fileCache[key]; banner('⛔ ' + e.message, '#b3261e'); }
+    }
     const pick = el('button', 'padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '엑셀 고르기');
     body.append(el('div', 'margin-bottom:8px', hint + ' 파일은 이 컴퓨터 안에서만 읽어요.'), pick);
     pick.onclick = () => {
@@ -512,7 +538,11 @@
       input.onchange = async () => {
         const f = input.files && input.files[0];
         if (!f) return;
-        try { onSheets(await readXlsx(await f.arrayBuffer()), f.name); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); }
+        try {
+          const sheets = await readXlsx(await f.arrayBuffer());
+          onSheets(sheets, f.name);
+          if (key) fileCache[key] = { sheets, name: f.name };
+        } catch (e) { banner('⛔ ' + e.message, '#b3261e'); }
       };
       input.click();
     };
@@ -539,6 +569,7 @@
     const hint = kind === 'behavior' ? '앱에서 내보낸 행동발달사항 엑셀을 고르세요.' : '앱에서 내보낸 과목별 종합의견 엑셀(또는 수행평가 결과 엑셀)을 고르세요.';
     filePicker(body, hint, (sheets, fileName) => {
       let sources;
+      const repick = () => { delete fileCache[kind]; openTextPanel(app, kind, title); };
       if (kind === 'behavior') sources = sheets.map((x) => ({ name: x.name, map: parseBehaviorSheet(x.rows) })).filter((x) => x.map);
       else {
         // 과목별 종합의견 내보내기(1행: 번호 | 이름 | 과목별 종합의견) 또는 수행평가 결과 엑셀의 마지막 '종합의견' 열
@@ -551,7 +582,7 @@
       }
       if (!sources.length) throw Error(kind === 'behavior' ? '행동발달사항 시트를 찾지 못했어요' : '과목별 종합의견 엑셀이나 수행평가 결과 엑셀을 골라 주세요');
       body.textContent = '';
-      body.append(el('div', 'color:#666;margin-bottom:6px', '파일: ' + fileName));
+      body.append(fileLine(fileName, repick));
       let si = Math.max(0, sources.findIndex((x) => subject && norm(x.name).startsWith(norm(subject))));
       const sel = el('select', 'margin:0 0 10px 6px;padding:4px');
       sources.forEach((x, i) => { const o = el('option', null, x.name); o.value = i; sel.append(o); });
@@ -585,10 +616,11 @@
       go.onclick = () => {
         for (const c of cur.changes) ds.setValue(c.r, cfg.textCol, c.text);
         try { app.lookup(cfg.grid).redraw(); } catch (_) {}
-        done(body, `✔ ${cur.changes.length}명의 글을 채웠어요.`);
+        done(body, `✔ ${subject ? subject + ' ' : ''}${cur.changes.length}명의 글을 채웠어요.`);
+        if (kind === 'subjText') nextSubject(body, () => openTextPanel(app, kind, title));
       };
       update();
-    });
+    }, kind);
     document.body.appendChild(panel);
   }
 
