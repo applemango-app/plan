@@ -221,25 +221,14 @@
   }
 
   function openPanel(app) {
-    document.getElementById(PANEL_ID)?.remove();
     const neis = readNeis(app);
     if (!neis.rows.length) return banner('먼저 과목을 고르고 조회를 눌러 주세요', '#b3261e');
-    const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:560px;max-height:70vh;overflow:auto;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
-    panel.id = PANEL_ID;
-    const close = el('button', 'float:right;border:0;background:none;font-size:20px;cursor:pointer', '✕');
-    close.onclick = () => panel.remove();
-    const back = el('button', 'float:right;margin-right:8px;padding:2px 10px;border-radius:6px;border:1px solid #b77a00;background:#fff7e6;cursor:pointer', '← 메뉴');
-    back.onclick = () => openMenu();
-    panel.append(back);
-    const titleEl = el('div', 'font-weight:700;font-size:16px;margin-bottom:8px', `🥭 애플망고 → 나이스 (${neis.subject}, 학생 ${neis.numbers.size}명 · 평가 ${neis.items.length}개)`);
-    panel.append(close, titleEl);
-    decorate(panel, titleEl);
-    const body = el('div');
+    const { panel, body } = makePanel(`🥭 교과별 평가 · ${neis.subject} (학생 ${neis.numbers.size}명 · 평가 ${neis.items.length}개)`);
     const pick = el('button', 'padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '애플망고 결과 엑셀 고르기');
     body.append(el('div', 'margin-bottom:8px', '앱에서 내보낸 수행평가 결과 엑셀(.xlsx)을 고르세요. 파일은 이 컴퓨터 안에서만 읽어요.'), pick);
     const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
     probeBtn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
-    panel.append(body, probeBtn);
+    body.append(probeBtn);
     document.body.appendChild(panel);
 
     pick.onclick = () => {
@@ -386,31 +375,36 @@
     banner(`✔ 화면 구조를 다운로드 폴더에 저장했어요 (화면 ${out.screens.length}개)`, '#1f7a3a');
   }
 
-  function probePanel(msg) {
-    document.getElementById(PANEL_ID)?.remove();
-    const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:360px;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
-    panel.id = PANEL_ID;
-    const close = el('button', 'float:right;border:0;background:none;font-size:20px;cursor:pointer', '✕');
-    close.onclick = () => panel.remove();
-    const btn = el('button', 'margin-top:10px;padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '이 화면 구조 조사 저장 (개발용)');
-    btn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
-    panel.append(close, el('div', 'font-weight:700;margin-bottom:6px', '🥭 애플망고'), el('div', null, msg), btn);
-    document.body.appendChild(panel);
-  }
-
   // ---------- 공통 패널 ----------
-  // 창 옮기기(제목을 끌기)와 접기. 옮긴 위치는 다음에 여는 창에도 쓴다(페이지를 새로 고치기 전까지).
+  // 제목 줄: [←(메뉴로)] 제목 ………… [—(접기)] [✕(닫기)]. 제목 줄을 끌어 옮긴다. 옮긴 위치는 다음 창에도 쓴다.
   let lastPos = null;
-  function decorate(panel, titleEl) {
+  function makePanel(title, isMenu) {
+    document.getElementById(PANEL_ID)?.remove();
+    const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:520px;max-height:70vh;display:flex;flex-direction:column;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #e8890c;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);overflow:hidden');
+    panel.id = PANEL_ID;
     if (lastPos) Object.assign(panel.style, { left: lastPos.left, top: lastPos.top, right: 'auto', bottom: 'auto' });
-    titleEl.style.cursor = 'move';
-    titleEl.title = '끌어서 옮길 수 있어요';
-    titleEl.onmousedown = (e) => {
+    const head = el('div', 'display:flex;align-items:center;gap:6px;padding:8px 10px;background:#e8890c;color:#fff;cursor:move;user-select:none');
+    const icon = (t, tip) => { const b = el('button', 'width:28px;height:28px;flex:none;border:0;border-radius:6px;background:rgba(255,255,255,.18);color:#fff;font:700 15px/1 sans-serif;cursor:pointer;padding:0', t); b.title = tip; b.onmousedown = (e) => e.stopPropagation(); return b; };
+    if (!isMenu) { const back = icon('←', '메뉴로'); back.onclick = () => openMenu(); head.append(back); }
+    head.append(el('div', 'flex:1;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', title));
+    const fold = icon('—', '접기');
+    const close = icon('✕', '닫기');
+    head.append(fold, close);
+    const body = el('div', 'padding:12px 16px;overflow:auto');
+    panel.append(head, body);
+    close.onclick = () => panel.remove();
+    fold.onclick = () => {
+      const folded = body.style.display !== 'none';
+      body.style.display = folded ? 'none' : '';
+      fold.textContent = folded ? '□' : '—';
+      fold.title = folded ? '펴기' : '접기';
+    };
+    head.onmousedown = (e) => {
       const r = panel.getBoundingClientRect();
       const dx = e.clientX - r.left, dy = e.clientY - r.top;
       const move = (ev) => {
-        const left = Math.max(0, Math.min(window.innerWidth - 80, ev.clientX - dx)) + 'px';
-        const top = Math.max(0, Math.min(window.innerHeight - 40, ev.clientY - dy)) + 'px';
+        const left = Math.max(0, Math.min(window.innerWidth - 120, ev.clientX - dx)) + 'px';
+        const top = Math.max(0, Math.min(window.innerHeight - 44, ev.clientY - dy)) + 'px';
         Object.assign(panel.style, { left, top, right: 'auto', bottom: 'auto' });
         lastPos = { left, top };
       };
@@ -419,30 +413,6 @@
       document.addEventListener('mouseup', up);
       e.preventDefault();
     };
-    const fold = el('button', 'float:right;margin-right:8px;padding:2px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;cursor:pointer', '접기');
-    fold.onclick = () => {
-      const folded = fold.textContent === '접기';
-      for (const c of panel.children) if (c !== titleEl && c.tagName !== 'BUTTON') c.style.display = folded ? 'none' : '';
-      fold.textContent = folded ? '펴기' : '접기';
-      panel.style.overflow = folded ? 'visible' : 'auto';
-    };
-    panel.insertBefore(fold, panel.firstChild);
-  }
-  function makePanel(title, isMenu) {
-    document.getElementById(PANEL_ID)?.remove();
-    const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:520px;max-height:70vh;overflow:auto;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
-    panel.id = PANEL_ID;
-    const close = el('button', 'float:right;border:0;background:none;font-size:20px;cursor:pointer', '✕');
-    close.onclick = () => panel.remove();
-    const body = el('div');
-    if (!isMenu) {
-      const back = el('button', 'float:right;margin-right:8px;padding:2px 10px;border-radius:6px;border:1px solid #b77a00;background:#fff7e6;cursor:pointer', '← 메뉴');
-      back.onclick = () => openMenu();
-      panel.append(back);
-    }
-    const titleEl = el('div', 'font-weight:700;font-size:16px;margin-bottom:8px', title);
-    panel.append(close, titleEl, body);
-    decorate(panel, titleEl);
     return { panel, body };
   }
   function filePicker(body, hint, onSheets) {
