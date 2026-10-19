@@ -161,6 +161,18 @@
     return m;
   }
 
+  // 과목별 종합의견 시트: 1행 번호 | 이름 | 과목별 종합의견(중등: 과목별 세부능력 및 특기사항)
+  function parseSummarySheet(rows) {
+    const h = rows[0] || [];
+    if (String(h[0]).trim() !== '번호' || !/종합의견|세부능력/.test(String(h[2] || '')) || /행동/.test(String(h[2] || ''))) return null;
+    const m = new Map();
+    for (const r of rows.slice(1)) {
+      const no = Number(String(r[0] || '').trim());
+      if (Number.isInteger(no) && no > 0) m.set(no, { name: String(r[1] || '').trim(), text: String(r[2] || '').trim() });
+    }
+    return m;
+  }
+
   // 글 칸 채우기 계산. rows: [{ r, no, name, cur }], source: Map(번호 → { name, text })
   function planText(rows, source, overwrite) {
     const stats = { fill: 0, same: 0, keep: 0, noText: 0 };
@@ -524,13 +536,20 @@
     for (let r = 0; r < ds.getRowCount(); r++) rows.push({ r, no: Number(ds.getValue(r, cfg.keyCol)), name: ds.getValue(r, cfg.nameCol), cur: ds.getValue(r, cfg.textCol) });
     const subject = cfg.subjCol && rows.length ? ds.getValue(0, cfg.subjCol) : '';
     const { panel, body } = makePanel(`🥭 ${title}${subject ? ' · ' + subject : ''} (학생 ${rows.length}명)`);
-    const hint = kind === 'behavior' ? '앱에서 내보낸 행동발달사항 엑셀을 고르세요.' : '앱에서 내보낸 수행평가 결과 엑셀을 고르세요. 과목 시트의 종합의견 열을 넣어요.';
+    const hint = kind === 'behavior' ? '앱에서 내보낸 행동발달사항 엑셀을 고르세요.' : '앱에서 내보낸 과목별 종합의견 엑셀(또는 수행평가 결과 엑셀)을 고르세요.';
     filePicker(body, hint, (sheets, fileName) => {
       let sources;
       if (kind === 'behavior') sources = sheets.map((x) => ({ name: x.name, map: parseBehaviorSheet(x.rows) })).filter((x) => x.map);
-      else sources = sheets.map((x) => ({ name: x.name, p: parseResultSheet(x.rows) })).filter((x) => x.p && x.p.summaryCol >= 0)
-        .map((x) => ({ name: x.name, map: new Map([...x.p.students].map(([n, st]) => [n, { name: st.name, text: st.summary }])) }));
-      if (!sources.length) throw Error(kind === 'behavior' ? '행동발달사항 시트를 찾지 못했어요' : '종합의견 열이 있는 결과 시트를 찾지 못했어요');
+      else {
+        // 과목별 종합의견 내보내기(1행: 번호 | 이름 | 과목별 종합의견) 또는 수행평가 결과 엑셀의 마지막 '종합의견' 열
+        sources = sheets.map((x) => {
+          const s = parseSummarySheet(x.rows);
+          if (s) return { name: x.name, map: s };
+          const p = parseResultSheet(x.rows);
+          return p && p.summaryCol >= 0 ? { name: x.name, map: new Map([...p.students].map(([n, st]) => [n, { name: st.name, text: st.summary }])) } : null;
+        }).filter(Boolean);
+      }
+      if (!sources.length) throw Error(kind === 'behavior' ? '행동발달사항 시트를 찾지 못했어요' : '과목별 종합의견 엑셀이나 수행평가 결과 엑셀을 골라 주세요');
       body.textContent = '';
       body.append(el('div', 'color:#666;margin-bottom:6px', '파일: ' + fileName));
       let si = Math.max(0, sources.findIndex((x) => subject && norm(x.name).startsWith(norm(subject))));
@@ -852,7 +871,7 @@ ${sv.err}
     { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', grid: 'grdMain', label: '행동특성 및 종합의견', path: '학급담임 › 학생생활 › 행동특성및종합의견 › [조회]를 눌러 주세요', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
     { re: /els_sdlbg00_m01$/, ds: 'dsStu', grid: 'grdStu', dirtyDs: 'dsGicRecStu', label: '누가기록', path: '학급담임 › 학생생활 › 행동특성및종합의견 › 누가기록 › [조회]를 눌러 주세요', open: (a) => openRecordPanel(a) },
   ];
-  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, parseBehaviorSheet, parseRecordSheet, toYmd, planText, autoMatch, plan, norm }; return; }
+  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, parseBehaviorSheet, parseSummarySheet, parseRecordSheet, toYmd, planText, autoMatch, plan, norm }; return; }
   if (!window.cpr) return banner('나이스 화면에서 눌러 주세요', '#b3261e');
   // 탭이 화면에 보이는지: 그 화면 표의 실제 크기가 0이 아니면 보이는 탭
   const shown = (a, gridId) => { try { const r = a.lookup(gridId).getActualRect(); return r.width > 0 && r.height > 0; } catch (_) { return false; } };
