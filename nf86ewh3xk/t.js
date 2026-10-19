@@ -591,22 +591,33 @@
       // 한 학생: 고르고, 없는 기록만 행추가로 넣는다. 저장은 하지 않는다.
       async function fillStudent(no) {
         if (!(await selectStudent(no))) return { err: `${no}번 학생 기록을 불러오지 못했어요` };
-        const have = new Set();
-        for (let r = 0; r < rec.getRowCount(); r++) have.add(recKey(String(rec.getValue(r, 'ghvrDevEnfcYmd') || ''), rec.getValue(r, 'ghvrDevCn')));
-        let added = 0, skipped = 0;
-        for (const x of byNo.get(no)) {
-          if (have.has(recKey(x.date, x.text))) { skipped++; continue; }
+        const exact = new Map(), sameText = new Map();
+        const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+        for (let r = 0; r < rec.getRowCount(); r++) {
+          bump(exact, recKey(String(rec.getValue(r, 'ghvrDevEnfcYmd') || ''), rec.getValue(r, 'ghvrDevCn')));
+          bump(sameText, norm(rec.getValue(r, 'ghvrDevCn')));
+        }
+        const take = (m, k) => { const n = m.get(k) || 0; if (!n) return false; m.set(k, n - 1); return true; };
+        const mine = byNo.get(no);
+        const need = [];
+        let skipped = 0;
+        for (const x of mine) if (take(exact, recKey(x.date, x.text))) { take(sameText, norm(x.text)); skipped++; } else need.push(x);
+        const toAdd = [];
+        for (const x of need) if (take(sameText, norm(x.text))) skipped++; else toAdd.push(x);
+        let added = 0;
+        const addedDates = [];
+        for (const x of toAdd) {
           const before = rec.getRowCount();
           app.lookup('btnAdd').click();
           if (rec.getRowCount() <= before) return { err: `${no}번 행추가가 되지 않았어요` };
           const r = rec.getRowCount() - 1;
           rec.setValue(r, 'ghvrDevEnfcYmd', x.date);
           rec.setValue(r, 'ghvrDevCn', x.text);
-          have.add(recKey(x.date, x.text));
+          addedDates.push(x.date);
           added++;
         }
         try { app.lookup('grdGicRecStu').redraw(); } catch (_) {}
-        return { added, skipped, total: rec.getRowCount() };
+        return { added, skipped, total: rec.getRowCount(), addedDates };
       }
 
       // 저장 누르기 → '저장되었습니다' 알림의 [확인]을 눌러 닫기 → 모든 줄이 저장된 상태인지 확인
@@ -658,29 +669,58 @@
         const no = el('button', btnStyle('#777'), '취소');
         confirmBox.append(el('div', 'margin-bottom:6px', `엑셀에 있는 학생 ${rest.length}명의 기록 ${cnt}건 중 나이스에 아직 없는 기록만 넣고, 학생마다 저장해요. (이미 있는 기록은 건너뛰어요) 시작할까요?`), yes, no);
         no.onclick = () => { confirmBox.style.display = 'none'; };
-        yes.onclick = async () => {
-          confirmBox.style.display = 'none';
-          running = true; stopReq = false; drawList();
-          let addedAll = 0;
-          while (idx < todo.length) {
-            if (stopReq) { say(`멈췄어요. 여기까지 저장했어요. (${idx}/${todo.length}명)`); break; }
-            const n = todo[idx];
-            say(`${n}번 진행 중… (${idx + 1}/${todo.length}명)`);
-            const r = await fillStudent(n);
-            if (r.err) { say('⚠ ' + r.err + '. 여기서 멈췄어요.', true); break; }
-            if (r.added) {
-              const s = await saveNow(r.total);
-              if (s.err) { status.set(n, `넣음 ${r.added}건 · 저장 확인 안 됨`); say(`⚠ ${n}번 저장 중 멈췄어요: ${s.err}`, true); drawList(); break; }
-              status.set(n, `저장됨 ✓ ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}`);
-              addedAll += r.added;
-            } else status.set(n, `모두 이미 있음 (${r.skipped}건)`);
-            idx++;
-            drawList();
-          }
-          running = false;
-          if (idx >= todo.length) say(`✔ 끝났어요. 학생 ${todo.length}명, 새 기록 ${addedAll}건을 저장했어요.`);
+        yes.onclick = () => { confirmBox.style.display = 'none'; runAll(); };
+      };
+
+      // 출결 날짜(학생 목록의 atteYmd)에서 날짜를 뽑는다. 저장이 거부됐을 때 겹치는 날짜를 알려 주는 데만 쓴다.
+      const atteDates = (no) => {
+        const s = roster.get(no);
+        let t = '';
+        try { t = String(stu.getValue(s.row, 'atteYmd') || ''); } catch (_) {}
+        return new Set([...t.matchAll(/(\d{4})[-.]?(\d{2})[-.]?(\d{2})/g)].map((m) => m[1] + m[2] + m[3]));
+      };
+      const md = (d) => `${Number(d.slice(4, 6))}월 ${Number(d.slice(6, 8))}일`;
+      const cont = el('button', btnStyle('#1f7a3a') + ';display:none', '계속 (다음 학생부터)');
+      body.insertBefore(cont, confirmBox);
+      let addedAll = 0;
+
+      async function runAll() {
+        running = true; stopReq = false; cont.style.display = 'none'; drawList();
+        while (idx < todo.length) {
+          if (stopReq) { say(`멈췄어요. 여기까지 저장했어요. (${idx}/${todo.length}명)`); break; }
+          const n = todo[idx];
+          say(`${n}번 진행 중… (${idx + 1}/${todo.length}명)`);
+          const r = await fillStudent(n);
+          if (r.err) { say('⚠ ' + r.err + '. 여기서 멈췄어요.', true); break; }
+          if (r.added) {
+            const sv = await saveNow(r.total);
+            if (sv.err) {
+              // 일시 정지: 넣은 기록은 화면에 남겨 두고, 선생님이 고쳐 저장한 뒤 [계속]을 누른다
+              const att = atteDates(n);
+              const hit = [...new Set(r.addedDates.filter((d) => att.has(d)))].map(md);
+              status.set(n, `⚠ 저장 안 됨 · 확인 필요`);
+              running = false; drawList();
+              cont.style.display = 'inline-block';
+              say(`⚠ ${n}번 기록이 저장되지 않았어요.\n${sv.err}\n` +
+                (hit.length ? `출결과 겹치는 날짜: ${hit.join(', ')}\n` : '') +
+                `나이스 알림을 닫고, 날짜를 고치거나 기록을 지운 뒤 나이스 [저장]을 누르세요. 그다음 [계속]을 누르면 ${todo[idx + 1] ? todo[idx + 1] + '번부터' : '마무리'} 이어서 해요.`, true);
+              return;
+            }
+            status.set(n, `저장됨 ✓ ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}`);
+            addedAll += r.added;
+          } else status.set(n, `모두 이미 있음 (${r.skipped}건)`);
+          idx++;
           drawList();
-        };
+        }
+        running = false;
+        if (idx >= todo.length) say(`✔ 끝났어요. 학생 ${todo.length}명, 새 기록 ${addedAll}건을 저장했어요.`);
+        drawList();
+      }
+      cont.onclick = () => {
+        if (dirtyRows()) return say('⚠ 아직 [저장]하지 않은 기록이 있어요. 날짜를 고치거나 지운 뒤 나이스 [저장]을 먼저 눌러 주세요.', true);
+        status.set(todo[idx], '선생님이 고쳐 저장함 ✓');
+        idx++;
+        runAll();
       };
       stop.onclick = () => { stopReq = true; say('지금 학생까지 마치고 멈출게요…'); };
       drawList();
