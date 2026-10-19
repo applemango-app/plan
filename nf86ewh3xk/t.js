@@ -257,6 +257,7 @@
     const neis = readNeis(app);
     if (!neis.rows.length) return banner('먼저 과목을 고르고 나이스 [조회] 버튼을 눌러 주세요', '#b3261e');
     const { panel, body } = makePanel(`🥭 교과별 평가 · ${neis.subject} (학생 ${neis.numbers.size}명 · 평가 ${neis.items.length}개)`);
+    followNeis(panel, () => gradeSig(app), () => openPanel(app));
     const pick = el('button', 'padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '애플망고 결과 엑셀 고르기');
     body.append(el('div', 'margin-bottom:8px', '앱에서 내보낸 수행평가 결과 엑셀(.xlsx)을 고르세요. 파일은 이 컴퓨터 안에서만 읽어요.'), pick);
     const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
@@ -346,7 +347,7 @@
           t.append(tr);
         });
         table.append(t);
-        block(`⚠ 고른 시트는 '${sheets[si].name}'인데, 나이스 화면의 교과는 '${neis.subject}'예요.\n나이스에서 교과를 바꾸고 [조회]를 누른 뒤 [나이스 화면 다시 읽기]를 눌러 주세요.`);
+        block(`⚠ 고른 시트는 '${sheets[si].name}'인데, 나이스 화면의 교과는 '${neis.subject}'예요.\n나이스에서 교과를 바꾸고 [조회]를 누르면 이 창이 저절로 그 교과로 바뀌어요.`);
         return;
       }
       const t = el('table', 'width:100%;border-collapse:collapse;font-size:13px');
@@ -559,6 +560,30 @@
     behavior: { ds: 'dsScrgRec', keyCol: 'clsNo', nameCol: 'stuFlnm', textCol: 'gnrlzOpiCn', grid: 'grdMain' },
   };
 
+  // 나이스 화면이 어떤 자료를 보여 주는지 한 줄로(교과·학생 수). 조회 중이라 비어 있으면 ''.
+  function textSig(app, cfg) {
+    try { const d = app.lookup(cfg.ds); const n = d.getRowCount(); return n ? `${cfg.subjCol ? d.getValue(0, cfg.subjCol) : ''}|${n}` : ''; } catch (_) { return ''; }
+  }
+  function gradeSig(app) {
+    try { const d = app.lookup('dsMain'); const n = d.getRowCount(); return n ? `${d.getValue(0, 'sbjtNm')}|${d.getValue(0, 'sccesCtrCd')}|${n}` : ''; } catch (_) { return ''; }
+  }
+  // 나이스에서 교과를 바꿔 [조회]하면 열린 창이 저절로 다시 읽는다(고른 파일은 그대로). 창이 닫히면 멈춘다.
+  function followNeis(panel, sig, reopen) {
+    const start = sig();
+    let t = 0;
+    const obs = new MutationObserver((muts) => {
+      if (!panel.isConnected) return obs.disconnect();
+      if (t || muts.every((m) => panel.contains(m.target))) return;
+      t = setTimeout(() => {
+        t = 0;
+        if (!panel.isConnected) return obs.disconnect();
+        const now = sig();
+        if (now && now !== start) { obs.disconnect(); reopen(); }
+      }, 400);
+    });
+    obs.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });
+  }
+
   function openTextPanel(app, kind, title) {
     const cfg = TEXT_SCREENS[kind];
     const ds = app.lookup(cfg.ds);
@@ -566,6 +591,8 @@
     for (let r = 0; r < ds.getRowCount(); r++) rows.push({ r, no: Number(ds.getValue(r, cfg.keyCol)), name: ds.getValue(r, cfg.nameCol), cur: ds.getValue(r, cfg.textCol) });
     const subject = cfg.subjCol && rows.length ? ds.getValue(0, cfg.subjCol) : '';
     const { panel, body } = makePanel(`🥭 ${title}${subject ? ' · ' + subject : ''} (학생 ${rows.length}명)`);
+    const startSig = textSig(app, cfg);
+    followNeis(panel, () => textSig(app, cfg), () => openTextPanel(app, kind, title));
     const hint = kind === 'behavior' ? '앱에서 내보낸 행동발달사항 엑셀을 고르세요.' : '앱에서 내보낸 과목별 종합의견 엑셀(또는 수행평가 결과 엑셀)을 고르세요.';
     filePicker(body, hint, (sheets, fileName) => {
       let sources;
@@ -598,6 +625,16 @@
       body.append(row, over, summary, go);
       let cur;
       const update = () => {
+        // 다른 과목 시트를 고르면 채우지 않는다(나이스 교과를 바꾸면 이 창이 저절로 다시 읽는다)
+        if (subject && !norm(sources[si].name).startsWith(norm(subject))) {
+          cur = null;
+          setRich(summary, `⚠ 고른 시트는 '${sources[si].name}'인데, 나이스 화면의 교과는 '${subject}'예요.\n나이스에서 교과를 바꾸고 [조회]를 누르면 이 창이 저절로 그 교과로 바뀌어요.`);
+          summary.style.color = '#b3261e';
+          go.disabled = true;
+          go.style.opacity = 0.5;
+          return;
+        }
+        summary.style.color = '';
         cur = planText(rows, sources[si].map, box.checked);
         const st = cur.stats;
         const longest = Math.max(0, ...cur.changes.map((c) => c.text.length));
@@ -614,6 +651,9 @@
       sel.onchange = () => { si = Number(sel.value); update(); };
       box.onchange = update;
       go.onclick = () => {
+        if (!cur || !cur.changes.length) return;
+        // 창을 연 뒤 나이스 화면이 바뀌었으면(교과 변경·조회) 줄 위치가 달라졌으니 다시 읽는다
+        if (textSig(app, cfg) !== startSig) return openTextPanel(app, kind, title);
         for (const c of cur.changes) ds.setValue(c.r, cfg.textCol, c.text);
         try { app.lookup(cfg.grid).redraw(); } catch (_) {}
         done(body, `✔ ${subject ? subject + ' ' : ''}${cur.changes.length}명의 글을 채웠어요.`);
