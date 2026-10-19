@@ -83,9 +83,10 @@
     const head = rows[1] || [];
     if (String(head[0]).trim() !== '번호') return null;
     const columns = [];
-    let area = '';
+    let area = '', summaryCol = -1;
     for (let c = 2; c < head.length; c++) {
       const label = String(head[c] || '').trim();
+      if (/^(종합의견|세부능력 및 특기사항)$/.test(label)) summaryCol = c;
       if (!label || TAIL.test(label)) continue;
       if (String((rows[0] || [])[c] || '').trim()) area = String(rows[0][c]).trim();
       columns.push({ col: c, area, label });
@@ -94,9 +95,9 @@
     for (const r of rows.slice(2)) {
       const no = Number(String(r[0] || '').trim());
       if (!Number.isInteger(no) || no <= 0) continue;
-      students.set(no, { name: String(r[1] || '').trim(), levels: columns.map((x) => String(r[x.col] || '').trim()) });
+      students.set(no, { name: String(r[1] || '').trim(), levels: columns.map((x) => String(r[x.col] || '').trim()), summary: summaryCol < 0 ? '' : String(r[summaryCol] || '').trim() });
     }
-    return { columns, students };
+    return { columns, students, summaryCol };
   }
 
   const norm = (s) => String(s || '').replace(/[\s,·・‧.\-/()（）]/g, '');
@@ -133,6 +134,39 @@
     }
     const numbersOnlyInFile = [...sheet.students.keys()].filter((n) => !neis.numbers.has(n));
     const nameMismatch = [...sheet.students.entries()].filter(([n, s]) => neis.names.has(n) && s.name && norm(neis.names.get(n)) !== norm(s.name)).map(([n]) => n);
+    return { changes, stats, numbersOnlyInFile, nameMismatch };
+  }
+
+  // 행동발달사항 시트: 1행 번호 | 이름 | 행동발달사항 종합의견
+  function parseBehaviorSheet(rows) {
+    const h = rows[0] || [];
+    if (String(h[0]).trim() !== '번호' || !/행동/.test(String(h[2] || ''))) return null;
+    const m = new Map();
+    for (const r of rows.slice(1)) {
+      const no = Number(String(r[0] || '').trim());
+      if (Number.isInteger(no) && no > 0) m.set(no, { name: String(r[1] || '').trim(), text: String(r[2] || '').trim() });
+    }
+    return m;
+  }
+
+  // 글 칸 채우기 계산. rows: [{ r, no, name, cur }], source: Map(번호 → { name, text })
+  function planText(rows, source, overwrite) {
+    const stats = { fill: 0, same: 0, keep: 0, noText: 0 };
+    const changes = [];
+    const numbers = new Set(rows.map((x) => x.no));
+    for (const row of rows) {
+      const src = source.get(row.no);
+      const text = src ? src.text : '';
+      if (!text) { stats.noText++; continue; }
+      const cur = String(row.cur || '').trim();
+      if (cur === text) { stats.same++; continue; }
+      if (cur && !overwrite) { stats.keep++; continue; }
+      stats.fill++;
+      changes.push({ r: row.r, text });
+    }
+    const byNo = new Map(rows.map((x) => [x.no, x.name]));
+    const numbersOnlyInFile = [...source.keys()].filter((n) => !numbers.has(n));
+    const nameMismatch = [...source.entries()].filter(([n, v]) => byNo.has(n) && v.name && norm(byNo.get(n)) !== norm(v.name)).map(([n]) => n);
     return { changes, stats, numbersOnlyInFile, nameMismatch };
   }
 
@@ -355,10 +389,158 @@
     document.body.appendChild(panel);
   }
 
-  // ---------- 시작 ----------
-  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, autoMatch, plan, norm }; return; }
-  const app = findScreen();
+  // ---------- 공통 패널 ----------
+  function makePanel(title) {
+    document.getElementById(PANEL_ID)?.remove();
+    const panel = el('div', 'position:fixed;top:60px;right:20px;width:520px;max-height:80vh;overflow:auto;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #f2a516;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:16px');
+    panel.id = PANEL_ID;
+    const close = el('button', 'float:right;border:0;background:none;font-size:20px;cursor:pointer', '✕');
+    close.onclick = () => panel.remove();
+    const body = el('div');
+    panel.append(close, el('div', 'font-weight:700;font-size:16px;margin-bottom:8px', title), body);
+    return { panel, body };
+  }
+  function filePicker(body, hint, onSheets) {
+    const pick = el('button', 'padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '엑셀 고르기');
+    body.append(el('div', 'margin-bottom:8px', hint + ' 파일은 이 컴퓨터 안에서만 읽어요.'), pick);
+    pick.onclick = () => {
+      const input = el('input');
+      input.type = 'file';
+      input.accept = '.xlsx,.cell';
+      input.onchange = async () => {
+        const f = input.files && input.files[0];
+        if (!f) return;
+        try { onSheets(await readXlsx(await f.arrayBuffer()), f.name); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); }
+      };
+      input.click();
+    };
+  }
+  function done(body, msg) {
+    body.textContent = '';
+    body.append(el('div', 'font-size:15px;font-weight:700;color:#1f7a3a;margin-bottom:6px', msg),
+      el('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
+  }
+
+  // ---------- 교과 문구 · 행동특성: 학생마다 글 칸 하나 ----------
+  const TEXT_SCREENS = {
+    subjText: { ds: 'dsMain', keyCol: 'stdntCn', nameCol: 'stdntNm', textCol: 'gnrlzOpiCn', subjCol: 'sbjtCdNm', grid: 'grdMain' },
+    behavior: { ds: 'dsScrgRec', keyCol: 'clsNo', nameCol: 'stuFlnm', textCol: 'gnrlzOpiCn', grid: 'grdMain' },
+  };
+
+  function openTextPanel(app, kind, title) {
+    const cfg = TEXT_SCREENS[kind];
+    const ds = app.lookup(cfg.ds);
+    const rows = [];
+    for (let r = 0; r < ds.getRowCount(); r++) rows.push({ r, no: Number(ds.getValue(r, cfg.keyCol)), name: ds.getValue(r, cfg.nameCol), cur: ds.getValue(r, cfg.textCol) });
+    const subject = cfg.subjCol && rows.length ? ds.getValue(0, cfg.subjCol) : '';
+    const { panel, body } = makePanel(`🥭 ${title}${subject ? ' · ' + subject : ''} (학생 ${rows.length}명)`);
+    const hint = kind === 'behavior' ? '앱에서 내보낸 행동발달사항 엑셀을 고르세요.' : '앱에서 내보낸 수행평가 결과 엑셀을 고르세요. 과목 시트의 종합의견 열을 넣어요.';
+    filePicker(body, hint, (sheets, fileName) => {
+      let sources;
+      if (kind === 'behavior') sources = sheets.map((x) => ({ name: x.name, map: parseBehaviorSheet(x.rows) })).filter((x) => x.map);
+      else sources = sheets.map((x) => ({ name: x.name, p: parseResultSheet(x.rows) })).filter((x) => x.p && x.p.summaryCol >= 0)
+        .map((x) => ({ name: x.name, map: new Map([...x.p.students].map(([n, st]) => [n, { name: st.name, text: st.summary }])) }));
+      if (!sources.length) throw Error(kind === 'behavior' ? '행동발달사항 시트를 찾지 못했어요' : '종합의견 열이 있는 결과 시트를 찾지 못했어요');
+      body.textContent = '';
+      body.append(el('div', 'color:#666;margin-bottom:6px', '파일: ' + fileName));
+      let si = Math.max(0, sources.findIndex((x) => subject && norm(x.name).startsWith(norm(subject))));
+      const sel = el('select', 'margin:0 0 10px 6px;padding:4px');
+      sources.forEach((x, i) => { const o = el('option', null, x.name); o.value = i; sel.append(o); });
+      sel.value = si;
+      const row = el('div', null, '시트:');
+      row.append(sel);
+      const over = el('label', 'display:block;margin:10px 0');
+      const box = el('input');
+      box.type = 'checkbox';
+      over.append(box, document.createTextNode(' 이미 입력된 글도 엑셀 내용으로 바꾸기'));
+      const summary = el('div', 'margin:8px 0;padding:8px;background:#f7f7f7;border-radius:8px;white-space:pre-line');
+      const go = el('button', 'padding:8px 14px;border-radius:8px;border:0;background:#1f7a3a;color:#fff;font-weight:700;cursor:pointer', '나이스 화면에 채우기');
+      body.append(row, over, summary, go);
+      let cur;
+      const update = () => {
+        cur = planText(rows, sources[si].map, box.checked);
+        const st = cur.stats;
+        const longest = Math.max(0, ...cur.changes.map((c) => c.text.length));
+        const lines = [`채울 학생 ${st.fill}명`, `이미 같은 글 ${st.same}명`];
+        if (st.keep) lines.push(`이미 다른 글이 있어 그대로 둘 학생 ${st.keep}명`);
+        if (st.noText) lines.push(`엑셀에 글이 없는 학생 ${st.noText}명`);
+        if (longest) lines.push(`가장 긴 글 ${longest}자`);
+        if (cur.numbersOnlyInFile.length) lines.push(`⚠ 나이스에 없는 번호: ${cur.numbersOnlyInFile.join(', ')}`);
+        if (cur.nameMismatch.length) lines.push(`⚠ 이름이 다른 번호: ${cur.nameMismatch.join(', ')} — 다른 반 파일인지 확인하세요`);
+        summary.textContent = lines.join('\n');
+        go.disabled = !cur.changes.length;
+        go.style.opacity = go.disabled ? 0.5 : 1;
+      };
+      sel.onchange = () => { si = Number(sel.value); update(); };
+      box.onchange = update;
+      go.onclick = () => {
+        for (const c of cur.changes) ds.setValue(c.r, cfg.textCol, c.text);
+        try { app.lookup(cfg.grid).redraw(); } catch (_) {}
+        done(body, `✔ ${cur.changes.length}명의 글을 채웠어요.`);
+      };
+      update();
+    });
+    document.body.appendChild(panel);
+  }
+
+  // ---------- 누가기록: 행추가 시험(저장 안 함) ----------
+  // 나이스의 [행추가] 버튼을 눌러 나이스가 새 줄을 만들게 하고(학생·학년·오늘 날짜가 들어감), 날짜와 내용만 바꾼다.
+  function openRecordPanel(app) {
+    const { panel, body } = makePanel('🥭 누가기록 (시험)');
+    const rec = app.lookup('dsGicRecStu');
+    const sel = app.lookup('dmSearch').getValue('stuInvlNo');
+    let no = '';
+    const stu = app.lookup('dsStu');
+    for (let r = 0; r < stu.getRowCount(); r++) if (stu.getValue(r, 'stuInvlNo') === sel) no = stu.getValue(r, 'clsNo');
+    body.append(el('div', null, sel ? `선택된 학생: ${no}번 · 기록 ${rec.getRowCount()}건` : '먼저 학생 목록에서 학생 한 명을 클릭해 주세요.'));
+    const test = el('button', 'margin-top:10px;padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '행추가 시험 (저장 안 함)');
+    test.disabled = !sel;
+    test.onclick = () => {
+      const before = rec.getRowCount();
+      const out = { before };
+      try { app.lookup('btnAdd').click(); out.click = 'ok'; } catch (e) { out.click = '실패 ' + e.message; }
+      out.after = rec.getRowCount();
+      const r = rec.getRowCount() - 1;
+      if (out.after > before) {
+        out.defaultDate = rec.getValue(r, 'ghvrDevEnfcYmd');
+        rec.setValue(r, 'ghvrDevEnfcYmd', '20261018');
+        rec.setValue(r, 'ghvrDevCn', '애플망고 시험 기록');
+        try { app.lookup('grdGicRecStu').redraw(); } catch (_) {}
+        out.row = { state: rec.getRowState(r), shlCd: rec.getValue(r, 'shlCd'), stuSame: rec.getValue(r, 'stuInvlNo') === sel, grd: rec.getValue(r, 'grd'), ayr: rec.getValue(r, 'ayr'), date: rec.getValue(r, 'ghvrDevEnfcYmd'), regSn: rec.getValue(r, 'regSn') };
+      }
+      body.append(el('pre', 'white-space:pre-wrap;background:#f7f7f7;padding:8px;border-radius:8px;font-size:12px', JSON.stringify(out, null, 1)),
+        el('div', null, '목록 맨 아래에 10월 18일 "애플망고 시험 기록"이 보이면 성공이에요. 저장하지 말고 [조회]로 되돌려 주세요.'));
+    };
+    body.append(test);
+    document.body.appendChild(panel);
+  }
+
+  // ---------- 시작: 열린 화면 고르기 ----------
+  const SCREENS = [
+    { re: /els_scres00_m02$/, ds: 'dsMain', label: '교과별 평가 (단계)', open: (a) => openPanel(a) },
+    { re: /els_scres10_m00$/, ds: 'dsMain', label: '교과 문구 (교과별 종합의견)', open: (a) => openTextPanel(a, 'subjText', '교과 문구') },
+    { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', label: '행동특성 및 종합의견', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
+    { re: /els_sdlbg00_m01$/, ds: 'dsStu', label: '누가기록 (시험)', open: (a) => openRecordPanel(a) },
+  ];
+  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, parseBehaviorSheet, planText, autoMatch, plan, norm }; return; }
   if (!window.cpr) return banner('나이스 화면에서 눌러 주세요', '#b3261e');
-  if (!app || !app.lookup('dsMain').getRowCount()) return probePanel('단계 입력은 [교과별 평가] 화면에서 조회한 뒤 눌러 주세요.');
-  openPanel(app);
+  const running = cpr.core.Platform.INSTANCE.getAllRunningAppInstances();
+  const found = [];
+  for (const sc of SCREENS) for (const a of running) {
+    if (!a.app || !sc.re.test(a.app.id)) continue;
+    let n = 0;
+    try { n = a.lookup(sc.ds).getRowCount(); } catch (_) {}
+    if (n) found.push({ sc, a });
+  }
+  const { panel, body } = makePanel('🥭 애플망고 → 나이스');
+  body.append(el('div', 'margin-bottom:8px', found.length ? '입력할 화면을 고르세요. (조회된 화면만 보여요)' : '나이스에서 입력 화면을 열고 조회한 뒤 다시 눌러 주세요.'));
+  for (const { sc, a } of found) {
+    const b = el('button', 'display:block;width:100%;text-align:left;margin:6px 0;padding:10px 14px;border-radius:8px;border:1px solid #b77a00;background:#fff7e6;font-weight:700;cursor:pointer', sc.label);
+    b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
+    body.append(b);
+  }
+  const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
+  probeBtn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
+  body.append(probeBtn);
+  document.body.appendChild(panel);
 })();
