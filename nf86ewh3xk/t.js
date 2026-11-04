@@ -292,7 +292,7 @@
     const over = el('label', 'display:block;margin:10px 0');
     const overBox = el('input');
     overBox.type = 'checkbox';
-    over.append(overBox, document.createTextNode(' 이미 입력된 단계도 엑셀 값으로 바꾸기'));
+    over.append(overBox, document.createTextNode(' 나이스에 이미 있는 단계도 애플망고 단계로 바꾸기'));
     const summary = el('div', 'margin:8px 0;padding:8px;background:#f7f7f7;border-radius:8px;white-space:pre-line');
     const go = el('button', 'padding:8px 14px;border-radius:8px;border:0;background:#1f7a3a;color:#fff;font-weight:700;cursor:pointer', '나이스 화면에 채우기');
     // 나이스에서 교과를 바꿔 [조회]했을 때: 고른 파일은 그대로 두고 나이스 화면만 다시 읽는다
@@ -330,7 +330,7 @@
         // 다른 과목 시트: 그 시트의 평가와 단계만 보여 주고, 채우기는 막는다
         const t = el('table', 'width:100%;border-collapse:collapse;font-size:13px');
         const hr = el('tr');
-        ['엑셀 영역', '평가', '엑셀 단계'].forEach((h) => hr.append(el('th', 'text-align:left;border-bottom:1px solid #ccc;padding:4px', h)));
+        ['애플망고 영역', '평가', '애플망고 단계'].forEach((h) => hr.append(el('th', 'text-align:left;border-bottom:1px solid #ccc;padding:4px', h)));
         t.append(hr);
         sheet.columns.forEach((c, ci) => {
           const count = new Map();
@@ -346,7 +346,7 @@
       }
       const t = el('table', 'width:100%;border-collapse:collapse;font-size:13px');
       const hr = el('tr');
-      ['나이스 영역', '평가요소', '짝지은 엑셀 평가 · 엑셀 단계'].forEach((h) => hr.append(el('th', 'text-align:left;border-bottom:1px solid #ccc;padding:4px', h)));
+      ['나이스 영역', '평가요소', '짝지은 애플망고 평가 · 단계'].forEach((h) => hr.append(el('th', 'text-align:left;border-bottom:1px solid #ccc;padding:4px', h)));
       t.append(hr);
       neis.items.forEach((it, i) => {
         const tr = el('tr');
@@ -383,7 +383,7 @@
       const s = current.stats.reduce((a, x) => { for (const k in x) a[k] = (a[k] || 0) + x[k]; return a; }, {});
       const lines = [`채울 칸 ${s.fill}개`, `이미 같은 값 ${s.same}개`];
       if (s.keep) lines.push(`이미 다른 값이 있어 그대로 둘 칸 ${s.keep}개`);
-      if (s.noLevel) lines.push(`엑셀에 단계가 없는 칸 ${s.noLevel}개`);
+      if (s.noLevel) lines.push(`애플망고에 단계가 없는 칸 ${s.noLevel}개`);
       if (s.unknown) lines.push(`⚠ 나이스 단계와 이름이 다른 칸 ${s.unknown}개 (예: 3단계/4단계 차이)`);
       if (current.numbersOnlyInFile.length) lines.push(`⚠ 나이스에 없는 번호: ${current.numbersOnlyInFile.join(', ')}`);
       if (current.nameMismatch.length) lines.push(`⚠ 이름이 다른 번호: ${current.nameMismatch.join(', ')} — 다른 반 파일인지 확인하세요`);
@@ -709,7 +709,7 @@
       const over = el('label', 'display:block;margin:10px 0');
       const box = el('input');
       box.type = 'checkbox';
-      over.append(box, document.createTextNode(' 이미 입력된 글도 엑셀 내용으로 바꾸기'));
+      over.append(box, document.createTextNode(' 나이스에 이미 있는 글도 애플망고 글로 바꾸기'));
       const summary = el('div', 'margin:8px 0;padding:8px;background:#f7f7f7;border-radius:8px;white-space:pre-line');
       const go = el('button', 'padding:8px 14px;border-radius:8px;border:0;background:#1f7a3a;color:#fff;font-weight:700;cursor:pointer', '나이스 화면에 채우기');
       body.append(row, over, summary, stickyBar(go));
@@ -732,7 +732,7 @@
         const longest = Math.max(0, ...cur.changes.map((c) => c.text.length));
         const lines = [`채울 학생 ${st.fill}명`, `이미 같은 글 ${st.same}명`];
         if (st.keep) lines.push(`이미 다른 글이 있어 그대로 둘 학생 ${st.keep}명`);
-        if (st.noText) lines.push(`엑셀에 글이 없는 학생 ${st.noText}명`);
+        if (st.noText) lines.push(`애플망고에 글이 없는 학생 ${st.noText}명`);
         if (longest) lines.push(`가장 긴 글 ${longest}자`);
         if (cur.numbersOnlyInFile.length) lines.push(`⚠ 나이스에 없는 번호: ${cur.numbersOnlyInFile.join(', ')}`);
         if (cur.nameMismatch.length) lines.push(`⚠ 이름이 다른 번호: ${cur.nameMismatch.join(', ')} — 다른 반 파일인지 확인하세요`);
