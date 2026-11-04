@@ -2,8 +2,12 @@
 // 나이스 '교과별 평가' 화면에서 애플망고 결과 엑셀의 평가 단계를 번호·영역에 맞춰 채운다.
 // 원칙: 나이스 정보는 밖으로 보내지 않는다(네트워크 요청 없음). 저장은 선생님이 직접 누른다.
 // 엑셀 내용은 화면에 글자로만 넣는다(innerHTML 사용 안 함).
+// 자료는 엑셀 파일이나 애플망고 웹앱에서 받는다. 웹앱은 중계 창(neis-bridge.html)을 열어 받고,
+// 그 창에는 무엇을 원하는지(화면 종류·교과 이름)만 알려 준다 — 나이스의 학생 정보는 보내지 않는다.
 (() => {
   const PANEL_ID = 'applemango-panel';
+  // 애플망고 웹앱 주소. 정식 주소(도메인)가 정해지면 바꾼다. 지금은 선생님 PC에서 띄운 웹앱.
+  const WEB_APP = 'http://localhost:8765';
 
   // ---------- xlsx 읽기 (외부 라이브러리 없이: zip 목차 → deflate 풀기 → XML) ----------
   async function unzip(buf) {
@@ -258,8 +262,6 @@
     if (!neis.rows.length) return banner('먼저 과목을 고르고 나이스 [조회] 버튼을 눌러 주세요', '#b3261e');
     const { panel, body } = makePanel(`🥭 교과별 평가 · ${neis.subject} (학생 ${neis.numbers.size}명 · 평가 ${neis.items.length}개)`);
     followNeis(panel, () => gradeSig(app), () => openPanel(app));
-    const pick = el('button', 'padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '애플망고 결과 엑셀 고르기');
-    body.append(el('div', 'margin-bottom:8px', '앱에서 내보낸 수행평가 결과 엑셀(.xlsx)을 고르세요. 파일은 이 컴퓨터 안에서만 읽어요.'), pick);
     const probeBtn = el('button', 'display:block;margin-top:14px;padding:4px 10px;border-radius:6px;border:1px solid #aaa;background:#f4f4f4;font-size:12px;cursor:pointer', '열린 화면 구조 조사 저장 (개발용)');
     probeBtn.onclick = () => { try { probe(); } catch (e) { banner('⛔ 조사 실패: ' + e.message, '#b3261e'); } };
     // 평소엔 숨긴다. 나이스 화면이 바뀌어 다시 조사해야 할 때 Shift를 누른 채 제목 줄을 클릭하면 나타난다.
@@ -267,25 +269,13 @@
     panel.firstChild.addEventListener('click', (e) => { if (e.shiftKey) probeBtn.style.display = 'block'; });
     body.append(probeBtn);
     document.body.appendChild(panel);
-    // 앞 교과에서 고른 파일이 있으면 다시 고르지 않고 바로 쓴다
-    if (fileCache.grade) return showMatch(app, neis, fileCache.grade.sheets, panel, body, fileCache.grade.name);
-
-    pick.onclick = () => {
-      const input = el('input');
-      input.type = 'file';
-      input.accept = '.xlsx,.cell';
-      input.onchange = async () => {
-        const f = input.files && input.files[0];
-        if (!f) return;
-        try {
-          const sheets = (await readXlsx(await f.arrayBuffer())).map((s) => ({ name: s.name, parsed: parseResultSheet(s.rows) })).filter((s) => s.parsed);
-          if (!sheets.length) throw Error('애플망고 결과 시트를 찾지 못했어요');
-          fileCache.grade = { sheets, name: f.name };
-          showMatch(app, neis, sheets, panel, body, f.name);
-        } catch (e) { banner('⛔ ' + e.message, '#b3261e'); }
-      };
-      input.click();
-    };
+    // 앞 교과에서 가져온 자료가 있으면 다시 고르지 않고 바로 쓴다(filePicker가 기억한다)
+    filePicker(body, '수행평가 결과를 가져오세요. 엑셀은 앱에서 내보낸 수행평가 결과 엑셀(.xlsx)이에요.', (raw, fileName) => {
+      const sheets = raw.map((s) => ({ name: s.name, parsed: parseResultSheet(s.rows) })).filter((s) => s.parsed);
+      if (!sheets.length) throw Error('애플망고 결과 시트를 찾지 못했어요');
+      showMatch(app, neis, sheets, panel, body, fileName);
+    }, 'grade', neis.subject);
+    body.append(probeBtn); // 숨긴 개발용 버튼은 늘 맨 아래에
   }
 
   function showMatch(app, neis, sheets, panel, body, fileName) {
@@ -512,8 +502,8 @@
   // 교과를 바꿔 창을 다시 열어도 파일을 다시 고르지 않는다. 파일은 이 컴퓨터의 메모리에만 있다.
   const fileCache = {};
   function fileLine(fileName, onRepick) {
-    const d = el('div', 'color:#666;margin-bottom:6px', '파일: ' + fileName);
-    const b = el('button', 'margin-left:8px;padding:2px 8px;border-radius:6px;border:1px solid #aaa;background:#fff;font-size:12px;cursor:pointer', '다른 파일 고르기');
+    const d = el('div', 'color:#666;margin-bottom:6px', (/^🌐/.test(fileName) ? '자료: ' : '파일: ') + fileName);
+    const b = el('button', 'margin-left:8px;padding:2px 8px;border-radius:6px;border:1px solid #aaa;background:#fff;font-size:12px;cursor:pointer', '다른 자료 가져오기');
     b.onclick = onRepick;
     d.append(b);
     return d;
@@ -526,12 +516,60 @@
     body.append(b);
     body.parentElement.__back = reopen;
   }
-  function filePicker(body, hint, onSheets, key) {
+  // 웹앱에서 자료 받기: 웹앱 주소의 중계 창을 열고, 선생님이 그 창에서 학급을 골라 [보내기]를 누르면 받는다.
+  // 중계 창에는 화면 종류와 교과 이름만 알려 준다. 받은 자료는 엑셀에서 읽은 것과 같은 모양(시트 이름·줄·칸).
+  const WEB_ORIGIN = new URL(WEB_APP).origin;
+  function fromWebApp(kind, subject) {
+    return new Promise((resolve, reject) => {
+      const url = WEB_APP + '/neis-bridge.html?kind=' + encodeURIComponent(kind) + (subject ? '&subject=' + encodeURIComponent(subject) : '');
+      let w = null;
+      try { w = window.open(url, 'applemango_neis_bridge', 'width=560,height=680'); } catch (_) {}
+      if (!w) return reject(Error('팝업이 막혔어요. 주소창 오른쪽에서 이 사이트의 팝업을 허용해 주세요.'));
+      let finished = false;
+      const end = () => { finished = true; window.removeEventListener('message', onMsg); clearInterval(iv); };
+      const onMsg = (ev) => {
+        if (ev.origin !== WEB_ORIGIN || ev.source !== w) return;
+        const d = ev.data;
+        if (!d || d.type !== 'applemango-neis') return;
+        if (d.t === 'data' && d.kind === kind && Array.isArray(d.sheets)) {
+          end();
+          // 받은 자료는 글자로만 다룬다
+          resolve({ name: '🌐 웹앱 · ' + String(d.name || ''), sheets: d.sheets.map((x) => ({ name: String(x.name), rows: (x.rows || []).map((r) => (r || []).map((c) => (c == null ? '' : String(c)))) })) });
+        }
+      };
+      window.addEventListener('message', onMsg);
+      // 중계 창이 나이스 주소를 알 수 있게 인사만 보낸다(자료 없음). 창을 닫으면 그만둔다.
+      const iv = setInterval(() => {
+        if (finished) return;
+        if (w.closed) { end(); return reject(null); }
+        try { w.postMessage({ type: 'applemango-neis', t: 'hello' }, WEB_ORIGIN); } catch (_) {}
+      }, 500);
+    });
+  }
+  function filePicker(body, hint, onSheets, key, subject) {
     if (key && fileCache[key]) {
       try { return onSheets(fileCache[key].sheets, fileCache[key].name); } catch (e) { delete fileCache[key]; banner('⛔ ' + e.message, '#b3261e'); }
     }
-    const pick = el('button', 'padding:8px 14px;border-radius:8px;border:1px solid #b77a00;background:#f2a516;font-weight:700;cursor:pointer', '엑셀 고르기');
-    body.append(el('div', 'margin-bottom:8px', hint + ' 파일은 이 컴퓨터 안에서만 읽어요.'), pick);
+    const btn = 'padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;margin-right:8px';
+    const web = el('button', btn + ';border:0;background:#2f6bff;color:#fff', '🌐 웹앱에서 가져오기');
+    const pick = el('button', btn + ';border:1px solid #b77a00;background:#f2a516', '📄 엑셀 고르기');
+    body.append(el('div', 'margin-bottom:8px', hint + ' 파일은 이 컴퓨터 안에서만 읽어요.'), web, pick,
+      el('div', 'margin-top:6px;color:#666;font-size:12px', '웹앱: 애플망고 웹앱이 이 PC에서 열려 있어야 해요. 작은 창에서 학급을 고르고 [나이스로 보내기]를 누르세요.'));
+    if (key) web.onclick = async () => {
+      web.disabled = true;
+      web.textContent = '웹앱 창에서 보내기를 기다리는 중…';
+      try {
+        const got = await fromWebApp(key, subject);
+        fileCache[key] = got;
+        onSheets(got.sheets, got.name);
+      } catch (e) {
+        if (e) { delete fileCache[key]; banner('⛔ ' + e.message, '#b3261e'); }
+      } finally {
+        web.disabled = false;
+        web.textContent = '🌐 웹앱에서 가져오기';
+      }
+    };
+    else web.style.display = 'none';
     pick.onclick = () => {
       const input = el('input');
       input.type = 'file';
@@ -660,7 +698,7 @@
         if (kind === 'subjText') nextSubject(body, () => openTextPanel(app, kind, title));
       };
       update();
-    }, kind);
+    }, kind, subject);
     document.body.appendChild(panel);
   }
 
@@ -678,15 +716,18 @@
     }
     return '';
   }
+  // 열은 머리글 이름으로 찾는다 — 앱 1.0.5부터 날짜와 누가기록 사이에 구분·영역 열이 있다.
   function parseRecordSheet(rows) {
     const h = (rows[0] || []).map((x) => String(x || '').trim());
-    if (h[0] !== '번호' || h[2] !== '날짜' || !/누가기록/.test(h[3] || '')) return null;
+    const cNo = h.indexOf('번호'), cName = h.indexOf('이름'), cDate = h.indexOf('날짜');
+    const cText = h.findIndex((x) => /누가기록/.test(x));
+    if (cNo < 0 || cDate < 0 || cText < 0) return null;
     const out = [];
     for (const r of rows.slice(1)) {
-      const no = Number(String(r[0] || '').trim());
-      const text = String(r[3] || '').trim();
+      const no = Number(String(r[cNo] || '').trim());
+      const text = String(r[cText] || '').trim();
       if (!Number.isInteger(no) || no <= 0 || !text) continue;
-      out.push({ no, name: String(r[1] || '').trim(), date: toYmd(r[2]), text });
+      out.push({ no, name: cName >= 0 ? String(r[cName] || '').trim() : '', date: toYmd(r[cDate]), text });
     }
     return out;
   }
@@ -932,7 +973,7 @@ ${sv.err}
       };
       stop.onclick = () => { stopReq = true; say('지금 학생까지 마치고 멈출게요…'); };
       drawList();
-    });
+    }, 'record');
     document.body.appendChild(panel);
   }
 
@@ -943,7 +984,7 @@ ${sv.err}
     { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', grid: 'grdMain', label: '행동특성 및 종합의견', path: '학급담임 › 학생생활 › 행동특성및종합의견 › [조회]를 눌러 주세요', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
     { re: /els_sdlbg00_m01$/, ds: 'dsStu', grid: 'grdStu', dirtyDs: 'dsGicRecStu', label: '누가기록', path: '학급담임 › 학생생활 › 행동특성및종합의견 › 누가기록 › [조회]를 눌러 주세요', open: (a) => openRecordPanel(a) },
   ];
-  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { readXlsx, parseResultSheet, parseBehaviorSheet, parseSummarySheet, parseRecordSheet, toYmd, planText, autoMatch, plan, norm }; return; }
+  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { fromWebApp, readXlsx, parseResultSheet, parseBehaviorSheet, parseSummarySheet, parseRecordSheet, toYmd, planText, autoMatch, plan, norm }; return; }
   if (!window.cpr) return banner('나이스 화면에서 눌러 주세요', '#b3261e');
   // 탭이 화면에 보이는지: 그 화면 표의 실제 크기가 0이 아니면 보이는 탭
   const shown = (a, gridId) => { try { const r = a.lookup(gridId).getActualRect(); return r.width > 0 && r.height > 0; } catch (_) { return false; } };
