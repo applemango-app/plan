@@ -508,12 +508,9 @@
     d.append(b);
     return d;
   }
-  // 채운 뒤: 나이스에서 다음 교과로 바꿔 조회하면 같은 파일로 이어서 넣는다
+  // 채운 뒤: 나이스에서 교과를 바꿔 조회하면 이 창이 저절로 그 교과로 바뀐다(followNeis). 같은 자료로 이어 넣는다.
   function nextSubject(body, reopen) {
-    body.append(rich('div', 'margin-top:12px;padding:8px 10px;background:#eef3ff;border-radius:8px', '다음 교과: 나이스에서 [저장]한 뒤 교과를 바꾸고 [조회]를 누르고, 아래 버튼을 눌러 주세요. 같은 엑셀 파일로 이어서 넣어요.'));
-    const b = el('button', 'margin-top:8px;padding:8px 14px;border-radius:8px;border:0;background:#2f6bff;color:#fff;font-weight:700;cursor:pointer', '다음 교과 넣기');
-    b.onclick = reopen;
-    body.append(b);
+    body.append(rich('div', 'margin-top:12px;color:#2f6bff', '다음 교과: 나이스에서 [저장] → 교과 바꾸고 [조회]'));
     body.parentElement.__back = reopen;
   }
   // 웹앱에서 자료 받기: 웹앱 주소의 중계 창을 열고, 선생님이 그 창에서 학급을 골라 [보내기]를 누르면 받는다.
