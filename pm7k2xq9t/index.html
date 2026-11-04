@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>애플망고 웹앱 연결 시험</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; line-height: 1.7; color: #222; background: #fff; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 17px; margin-top: 32px; }
+  .btn { display: inline-block; margin: 10px 0; padding: 12px 22px; background: #8fd16a; color: #222; font-weight: 700; border-radius: 10px; text-decoration: none; cursor: grab; border: 2px dashed #3f8a1c; }
+  ol li { margin-bottom: 8px; }
+  .note { color: #666; font-size: 14px; }
+  kbd { background: #eee; border-radius: 4px; padding: 1px 6px; border: 1px solid #ccc; }
+  table { border-collapse: collapse; font-size: 14px; }
+  td { border: 1px solid #ccc; padding: 4px 10px; }
+</style>
+</head>
+<body>
+<h1>애플망고 웹앱 연결 시험</h1>
+<p>나이스 화면에서 <b>웹앱 창을 열고, 그 창에서 데이터를 받아올 수 있는지</b>만 확인하는 시험이에요. 가짜 데이터만 주고받고, 나이스의 값은 읽거나 바꾸지 않아요.</p>
+<a class="btn" id="bm" href="#">🧪 웹앱 연결 시험</a>
+<ol>
+  <li>위 버튼을 <b>브라우저 위쪽 즐겨찾기 줄로 끌어다 놓으세요.</b> (즐겨찾기 줄이 안 보이면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>)</li>
+  <li>나이스에 로그인해서 아무 화면이나 연 뒤, 즐겨찾기 줄의 <b>🧪 웹앱 연결 시험</b>을 누르세요.</li>
+  <li>작은 창(애플망고 웹앱)이 열리고, 나이스 화면 위쪽에 띠가 나와요. <b>띠 색과 글자</b>를 알려 주세요.</li>
+</ol>
+<table>
+  <tr><td>🟩 초록</td><td>성공 — 창 열기와 데이터 받기 모두 돼요</td></tr>
+  <tr><td>🟥 빨강 "팝업이 막혔어요"</td><td>브라우저가 창을 막았어요. 주소창 오른쪽 팝업 차단 아이콘에서 허용 후 다시 눌러 보세요</td></tr>
+  <tr><td>🟨 노랑</td><td>창은 열렸지만 데이터가 오지 않았어요. 열린 작은 창에 적힌 줄도 알려 주세요</td></tr>
+</table>
+<p class="note">먼저 이 페이지에서 버튼을 눌러 보면(끌어다 놓지 않고 클릭) 같은 시험을 여기서 해 볼 수 있어요.</p>
+<script>
+  // 즐겨찾기 버튼 = 시험 코드 전체가 이 안에 들어 있다(밖에서 받아 오는 코드 없음).
+  var APP = new URL('app.html', location.href).href;
+  var APP_ORIGIN = location.origin;
+  function code() {
+    return "(()=>{const APP='" + APP + "',O='" + APP_ORIGIN + "',t0=Date.now();" +
+      "const bar=(m,bg,fg)=>{document.querySelectorAll('[data-am-test]').forEach((x)=>x.remove());const d=document.createElement('div');d.setAttribute('data-am-test','');d.textContent=m+'  (눌러서 닫기)';d.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;background:'+bg+';color:'+fg+';font:600 15px sans-serif;padding:10px 18px;border-radius:8px;cursor:pointer;max-width:90vw';d.onclick=()=>d.remove();document.body.appendChild(d)};" +
+      "let w=null;try{w=window.open(APP,'applemango_pm_test','width=520,height=600')}catch(e){}" +
+      "if(!w)return bar('⛔ 1단계 실패: 팝업이 막혔어요','#b3261e','#fff');" +
+      "bar('… 웹앱 창을 열었어요. 데이터를 기다리는 중','#555','#fff');" +
+      "let got=false,ready=false;" +
+      "const h=(ev)=>{if(ev.origin!==O)return;const d=ev.data;if(!d||d.type!=='am-test')return;" +
+      "if(d.kind==='ready')ready=true;" +
+      "if(d.kind==='data'&&!got){got=true;window.removeEventListener('message',h);" +
+      "bar('✔ 성공: 웹앱 창 열림 · 데이터 받음 ('+d.rows.map((r)=>r.no+'번 '+r.level).join(', ')+') · '+(Date.now()-t0)+'ms','#1b7f3b','#fff')}};" +
+      "window.addEventListener('message',h);" +
+      "const iv=setInterval(()=>{if(got)return clearInterval(iv);try{w.postMessage({type:'am-test',kind:'request'},O)}catch(e){}},400);" +
+      "setTimeout(()=>{if(got)return;clearInterval(iv);window.removeEventListener('message',h);" +
+      "bar('⚠ 창은 열렸지만 데이터를 못 받았어요 (준비 신호 '+(ready?'받음':'못 받음')+', 창 '+(w.closed?'닫힘/끊김':'열림')+')','#f2c94c','#222')},15000)})();";
+  }
+  var a = document.getElementById('bm');
+  a.href = 'javascript:' + encodeURIComponent(code());
+  a.addEventListener('click', function (e) { e.preventDefault(); (0, eval)(code()); });
+</script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>애플망고 웹앱 (연결 시험)</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; margin: 24px; line-height: 1.7; color: #222; }
+  h1 { font-size: 19px; }
+  li { margin-bottom: 4px; }
+  .ok { color: #1b7f3b; font-weight: 700; }
+  .bad { color: #b3261e; font-weight: 700; }
+  .note { color: #666; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>🥭 애플망고 웹앱 (연결 시험)</h1>
+<p>나이스 화면의 시험 버튼이 이 창을 열었다면, 아래 줄이 차례로 채워져요. 확인이 끝나면 이 창은 닫아도 돼요.</p>
+<ol id="log"></ol>
+<p class="note">시험용 가짜 데이터(가상학생 3명)만 보내요. 나이스 주소(neis.go.kr)에서 온 요청에만 답해요.</p>
+<script>
+  // 연결 시험용 가짜 웹앱: 나이스 탭의 즐겨찾기 버튼이 창을 열고 요청하면 가짜 데이터를 돌려준다.
+  var log = document.getElementById('log');
+  function line(text, cls) {
+    var li = document.createElement('li');
+    li.textContent = text;
+    if (cls) li.className = cls;
+    log.appendChild(li);
+  }
+  var FAKE = [
+    { no: 1, name: '가상학생1', level: '매우잘함' },
+    { no: 2, name: '가상학생2', level: '잘함' },
+    { no: 3, name: '가상학생3', level: '보통' },
+  ];
+  // 진짜 웹앱도 나이스 주소에만 데이터를 보낸다. 시험 페이지 자체(github.io)는 혼자 시험해 볼 때를 위해 허용.
+  function allowed(origin) {
+    return /^https:\/\/([a-z0-9-]+\.)*neis\.go\.kr$/.test(origin) || origin === location.origin;
+  }
+  line(window.opener ? '① 나를 연 창(나이스)과 이어져 있어요' : '① 나를 연 창과 이어져 있지 않아요 (나이스가 연결을 끊었을 수 있어요)', window.opener ? 'ok' : 'bad');
+  if (window.opener) {
+    try {
+      // 준비 신호에는 데이터가 없다(그래서 받는 곳을 가리지 않아도 된다).
+      window.opener.postMessage({ type: 'am-test', kind: 'ready' }, '*');
+      line('② 준비됐다고 알렸어요');
+    } catch (e) {
+      line('② 준비 신호를 못 보냈어요: ' + e.message, 'bad');
+    }
+  }
+  var answered = false;
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.type !== 'am-test' || d.kind !== 'request') return;
+    if (!allowed(ev.origin)) {
+      line('나이스가 아닌 곳(' + ev.origin + ')의 요청이라 보내지 않았어요', 'bad');
+      return;
+    }
+    ev.source.postMessage({ type: 'am-test', kind: 'data', rows: FAKE }, ev.origin);
+    if (!answered) {
+      answered = true;
+      line('③ 요청 받음 (' + ev.origin + ') → 가짜 데이터 ' + FAKE.length + '명 보냈어요', 'ok');
+      line('나이스 화면에 초록 띠가 보이면 성공이에요. 이 창은 닫아도 돼요.');
+    }
+  });
+</script>
+</body>
+</html>
