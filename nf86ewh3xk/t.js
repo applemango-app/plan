@@ -322,6 +322,10 @@
     const render = () => {
       const sheet = sheets[si].parsed;
       table.textContent = '';
+      if (!sheets.some((x) => norm(x.name).startsWith(subj))) {
+        block(noSubjectMsg(neis.subject, '평가 결과', sheets.map((x) => x.name)));
+        return;
+      }
       if (!sheetOk()) {
         // 다른 과목 시트: 그 시트의 평가와 단계만 보여 주고, 채우기는 막는다
         const t = el('table', 'width:100%;border-collapse:collapse;font-size:13px');
@@ -508,6 +512,13 @@
     b.onclick = onRepick;
     d.append(b);
     return d;
+  }
+  // 가져온 자료(엑셀·웹앱)에 나이스 화면의 교과가 아예 없을 때의 안내
+  function noSubjectMsg(subject, what, names) {
+    return `⚠ 가져온 자료에 '${subject}' ${what}이(가) 없어요.
+있는 교과: ${names.join(', ') || '없음'}
+애플망고에서 ${subject} ${what}을(를) 먼저 만든 뒤 [다른 자료 가져오기]를 눌러 주세요.
+다른 교과를 넣으려면 나이스에서 교과를 바꾸고 [조회]를 누르세요.`;
   }
   // 채우기 버튼 줄: 평가 항목이 많아 창 안이 넘쳐도 창 맨 아래에 붙어 늘 보인다.
   function stickyBar(...buttons) {
@@ -705,9 +716,11 @@
       let cur;
       const update = () => {
         // 다른 과목 시트를 고르면 채우지 않는다(나이스 교과를 바꾸면 이 창이 저절로 다시 읽는다)
-        if (subject && !norm(sources[si].name).startsWith(norm(subject))) {
+        const missing = subject && !sources.some((x) => norm(x.name).startsWith(norm(subject)));
+        if (subject && (missing || !norm(sources[si].name).startsWith(norm(subject)))) {
           cur = null;
-          setRich(summary, `⚠ 고른 시트는 '${sources[si].name}'인데, 나이스 화면의 교과는 '${subject}'예요.\n나이스에서 교과를 바꾸고 [조회]를 누르면 이 창이 저절로 그 교과로 바뀌어요.`);
+          if (missing) setRich(summary, noSubjectMsg(subject, '종합의견', sources.map((x) => x.name)));
+          else setRich(summary, `⚠ 고른 시트는 '${sources[si].name}'인데, 나이스 화면의 교과는 '${subject}'예요.\n나이스에서 교과를 바꾸고 [조회]를 누르면 이 창이 저절로 그 교과로 바뀌어요.`);
           summary.style.color = '#b3261e';
           go.disabled = true;
           go.style.opacity = 0.5;
@@ -1046,7 +1059,11 @@ ${sv.err}
     });
   }
 
+  // 지금 🥭 창이 맡은 나이스 화면(메뉴면 null). 화면을 바꿔 조회하면 이 값을 보고 창을 그 화면으로 바꾼다.
+  let activeSc = null;
+  function openScreen(sc, a) { activeSc = sc; sc.open(a); }
   function openMenu() {
+    activeSc = null;
     const { panel, body } = makePanel('🥭 애플망고 → 나이스', true);
     body.append(rich('div', 'margin-bottom:8px;padding:8px 10px;background:#eef3ff;border-radius:8px', '버튼은 안내와 같이 나이스 화면을 열면 활성화돼요.'));
     const list = el('div');
@@ -1066,7 +1083,7 @@ ${sv.err}
         b.append(el('div', null, sc.label));
         if (note) b.append(rich('div', `font-weight:400;font-size:12px;white-space:pre-line;line-height:22px;color:${dirty ? '#b3261e' : '#888'}`, note));
         b.disabled = !on;
-        if (on) b.onclick = () => { try { sc.open(a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
+        if (on) b.onclick = () => { try { openScreen(sc, a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); } };
         list.append(b);
       }
     };
@@ -1106,5 +1123,32 @@ ${sv.err}
   fabWrap.append(fab, x);
   document.body.appendChild(fabWrap);
   function showFab(on) { fabWrap.style.display = on ? 'block' : 'none'; }
-  openMenu();
+
+  // 시작: 조회된 화면이 하나뿐이면 메뉴 없이 그 화면 창을 바로 연다.
+  const enabled = () => menuState().filter((x) => !x.why);
+  const first = enabled();
+  try { if (first.length === 1) openScreen(first[0].sc, first[0].a); else openMenu(); } catch (e) { openMenu(); }
+
+  // 나이스에서 다른 화면을 열고 [조회]하면 🥭 창도 그 화면으로 바꾼다(같은 화면의 교과 바꾸기는 각 창의 followNeis가 맡는다).
+  // 새로 조회된 화면이 하나일 때만, 지금 창의 화면이 더는 보이지 않거나 메뉴일 때만 바꾼다. 내려 둔(—) 창은 그대로 둔다.
+  let prevOn = new Set(first.map((x) => x.sc.label));
+  let wt = 0;
+  const watch = new MutationObserver((muts) => {
+    if (!fabWrap.isConnected) return watch.disconnect();
+    const p = document.getElementById(PANEL_ID);
+    if (wt || muts.every((m) => (p && p.contains(m.target)) || fabWrap.contains(m.target))) return;
+    wt = setTimeout(() => {
+      wt = 0;
+      let on;
+      try { on = enabled(); } catch (_) { return; }
+      const now = new Set(on.map((x) => x.sc.label));
+      const fresh = on.filter((x) => !prevOn.has(x.sc.label));
+      prevOn = now;
+      const panel = document.getElementById(PANEL_ID);
+      if (!panel || panel.style.display === 'none' || fresh.length !== 1) return;
+      if (activeSc && now.has(activeSc.label)) return;
+      try { openScreen(fresh[0].sc, fresh[0].a); } catch (e) { banner('⛔ ' + e.message, '#b3261e'); }
+    }, 500);
+  });
+  watch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });
 })();
