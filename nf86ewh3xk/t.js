@@ -274,7 +274,7 @@
       const sheets = raw.map((s) => ({ name: s.name, parsed: parseResultSheet(s.rows) })).filter((s) => s.parsed);
       if (!sheets.length) throw Error('애플망고 결과 시트를 찾지 못했어요');
       showMatch(app, neis, sheets, panel, body, fileName);
-    }, 'grade', neis.subject);
+    }, 'grade', neis.subject, neis.names);
     body.append(probeBtn); // 숨긴 개발용 버튼은 늘 맨 아래에
   }
 
@@ -531,10 +531,15 @@
         if (ev.origin !== WEB_ORIGIN || ev.source !== w) return;
         const d = ev.data;
         if (!d || d.type !== 'applemango-neis') return;
-        if (d.t === 'data' && d.kind === kind && Array.isArray(d.sheets)) {
+        if (d.t === 'data' && d.kind === kind && Array.isArray(d.classes)) {
           end();
           // 받은 자료는 글자로만 다룬다
-          resolve({ name: '🌐 웹앱 · ' + String(d.name || ''), sheets: d.sheets.map((x) => ({ name: String(x.name), rows: (x.rows || []).map((r) => (r || []).map((c) => (c == null ? '' : String(c)))) })) });
+          const text = (c) => (c == null ? '' : String(c));
+          resolve(d.classes.map((k) => ({
+            label: text(k.label),
+            name: '🌐 웹앱 · ' + text(k.name),
+            sheets: (k.sheets || []).map((x) => ({ name: text(x.name), rows: (x.rows || []).map((r) => (r || []).map(text)) })),
+          })));
         }
       };
       window.addEventListener('message', onMsg);
@@ -546,7 +551,25 @@
       }, 500);
     });
   }
-  function filePicker(body, hint, onSheets, key, subject) {
+  // 웹앱이 보낸 학급 가운데 나이스 화면의 학급 고르기: 번호·이름이 가장 많이 맞는 학급.
+  // 나이스 명단은 이 화면 안에서만 비교하고 어디에도 보내지 않는다.
+  function rosterOf(sheets) {
+    const m = new Map();
+    for (const s of sheets) for (const r of s.rows) {
+      const no = String(r[0] || '').trim();
+      if (/^\d+$/.test(no) && String(r[1] || '').trim()) m.set(Number(no), String(r[1]).trim());
+    }
+    return m;
+  }
+  function scoreClasses(classes, neisNames) {
+    return classes.map((c) => {
+      const app = rosterOf(c.sheets);
+      let hit = 0;
+      for (const [no, nm] of neisNames || []) if (app.has(no) && nm && sameName(nm, app.get(no))) hit++;
+      return { c, hit };
+    }).sort((a, b) => b.hit - a.hit);
+  }
+  function filePicker(body, hint, onSheets, key, subject, neisNames) {
     if (key && fileCache[key]) {
       try { return onSheets(fileCache[key].sheets, fileCache[key].name); } catch (e) { delete fileCache[key]; banner('⛔ ' + e.message, '#b3261e'); }
     }
@@ -554,14 +577,27 @@
     const web = el('button', btn + ';border:0;background:#2f6bff;color:#fff', '🌐 웹앱에서 가져오기');
     const pick = el('button', btn + ';border:1px solid #b77a00;background:#f2a516', '📄 엑셀 고르기');
     body.append(el('div', 'margin-bottom:8px', hint + ' 파일은 이 컴퓨터 안에서만 읽어요.'), web, pick,
-      el('div', 'margin-top:6px;color:#666;font-size:12px', '웹앱: 애플망고 웹앱이 이 PC에서 열려 있어야 해요. 작은 창에서 학급을 고르고 [나이스로 보내기]를 누르세요.'));
+      el('div', 'margin-top:6px;color:#666;font-size:12px', '웹앱: 같은 크롬 창에서 애플망고 웹앱이 열려 있어야 해요. 나이스 화면의 학급에 맞는 자료를 저절로 골라 와요.'));
     if (key) web.onclick = async () => {
       web.disabled = true;
-      web.textContent = '웹앱 창에서 보내기를 기다리는 중…';
+      web.textContent = '웹앱에서 받는 중…';
       try {
-        const got = await fromWebApp(key, subject);
-        fileCache[key] = got;
-        onSheets(got.sheets, got.name);
+        const classes = await fromWebApp(key, subject);
+        if (!classes.length) throw Error('웹앱에서 받은 자료가 없어요');
+        const use = (got) => { fileCache[key] = got; onSheets(got.sheets, got.name); };
+        const ranked = scoreClasses(classes, neisNames);
+        // 학급이 하나이거나, 나이스 명단과 가장 많이 맞는 학급이 하나로 정해지면 바로 쓴다
+        if (ranked.length === 1 || (ranked[0].hit > 0 && ranked[0].hit > ranked[1].hit)) return use(ranked[0].c);
+        // 정해지지 않으면 선생님이 고른다
+        body.textContent = '';
+        body.append(el('div', 'margin-bottom:8px;font-weight:700', '어느 학급 자료를 넣을까요?'),
+          el('div', 'margin-bottom:8px;color:#666', '나이스 화면의 번호·이름과 맞는 학생 수를 함께 보여 드려요.'));
+        for (const { c, hit } of ranked) {
+          const b = el('button', btn + ';display:block;margin:0 0 6px;border:1px solid #2f6bff;background:#fff;color:#2f6bff', `${c.label} (맞는 학생 ${hit}명)`);
+          b.onclick = () => { try { use(c); } catch (err) { banner('⛔ ' + err.message, '#b3261e'); } };
+          body.append(b);
+        }
+        return;
       } catch (e) {
         if (e) { delete fileCache[key]; banner('⛔ ' + e.message, '#b3261e'); }
       } finally {
@@ -698,7 +734,7 @@
         if (kind === 'subjText') nextSubject(body, () => openTextPanel(app, kind, title));
       };
       update();
-    }, kind, subject);
+    }, kind, subject, new Map(rows.map((x) => [x.no, x.name])));
     document.body.appendChild(panel);
   }
 
@@ -973,7 +1009,7 @@ ${sv.err}
       };
       stop.onclick = () => { stopReq = true; say('지금 학생까지 마치고 멈출게요…'); };
       drawList();
-    }, 'record');
+    }, 'record', '', new Map([...roster].map(([no, v]) => [no, v.name])));
     document.body.appendChild(panel);
   }
 
