@@ -518,7 +518,11 @@
     const saved = { style: panel.style.cssText, title: titleEl ? titleEl.textContent : '' };
     body.style.display = 'none';
     Object.assign(panel.style, { left: 'auto', top: 'auto', right: '20px', bottom: '20px', width: 'auto', maxWidth: '420px' });
-    if (titleEl) titleEl.textContent = `✔ ${label} 채움 · 확인 후 [저장]`;
+    if (titleEl) titleEl.textContent = `✔ ${label} 채웠어요`;
+    // 띠 아래 짧은 안내: 처음 쓰는 선생님도 다음에 할 일을 알 수 있게
+    const guide = rich('div', 'padding:8px 12px;font-size:13px;line-height:1.7;background:#fff8ef', '① 화면을 확인하고 나이스 [저장]\n② 다음 교과: 나이스에서 교과를 바꾸고 [조회] → 이 창이 다시 열려요');
+    guide.style.whiteSpace = 'pre-line';
+    panel.append(guide);
     const grow = el('button', 'width:28px;height:28px;flex:none;border:0;border-radius:6px;background:rgba(255,255,255,.18);color:#fff;font:700 15px/1 sans-serif;cursor:pointer;padding:0', '▢');
     grow.title = '펼치기';
     grow.onmousedown = (e) => e.stopPropagation();
@@ -526,6 +530,7 @@
       panel.style.cssText = saved.style;
       body.style.display = '';
       if (titleEl) titleEl.textContent = saved.title;
+      guide.remove();
       grow.remove();
     };
     head.insertBefore(grow, head.lastChild);
