@@ -467,7 +467,7 @@
   function makePanel(title, isMenu) {
     document.getElementById(PANEL_ID)?.remove();
     showFab(false);
-    const panel = el('div', 'position:fixed;bottom:12px;right:20px;width:520px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #e8890c;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);overflow:hidden');
+    const panel = el('div', 'position:fixed;bottom:60px;right:20px;width:520px;max-height:calc(100vh - 80px);display:flex;flex-direction:column;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #e8890c;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);overflow:hidden');
     panel.id = PANEL_ID;
     // 옮긴 자리는 왼쪽·아래 끝으로 기억한다 — 내용이 늘거나 줄어도 아래 끝은 그대로 있고 위로만 자란다.
     if (lastPos) Object.assign(panel.style, { left: lastPos.left, bottom: lastPos.bottom, right: 'auto', top: 'auto' });
