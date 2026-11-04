@@ -304,7 +304,7 @@
       if (titleEl) titleEl.textContent = `🥭 교과별 평가 · ${fresh.subject} (학생 ${fresh.numbers.size}명 · 평가 ${fresh.items.length}개)`;
       showMatch(app, fresh, sheets, panel, body, fileName);
     };
-    body.append(sheetRow, table, over, summary, go, reread);
+    body.append(sheetRow, table, over, summary, stickyBar(go, reread));
     let choice = [];
     const sheetOk = () => norm(sheets[si].name).startsWith(subj);
     // 창을 연 뒤 나이스에서 교과를 바꿔 조회했으면 줄 위치가 달라져 채우면 안 된다
@@ -467,9 +467,10 @@
   function makePanel(title, isMenu) {
     document.getElementById(PANEL_ID)?.remove();
     showFab(false);
-    const panel = el('div', 'position:fixed;bottom:96px;right:20px;width:520px;max-height:70vh;display:flex;flex-direction:column;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #e8890c;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);overflow:hidden');
+    const panel = el('div', 'position:fixed;bottom:12px;right:20px;width:520px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #e8890c;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);overflow:hidden');
     panel.id = PANEL_ID;
-    if (lastPos) Object.assign(panel.style, { left: lastPos.left, top: lastPos.top, right: 'auto', bottom: 'auto' });
+    // 옮긴 자리는 왼쪽·아래 끝으로 기억한다 — 내용이 늘거나 줄어도 아래 끝은 그대로 있고 위로만 자란다.
+    if (lastPos) Object.assign(panel.style, { left: lastPos.left, bottom: lastPos.bottom, right: 'auto', top: 'auto' });
     const head = el('div', 'display:flex;align-items:center;gap:6px;padding:8px 10px;background:#e8890c;color:#fff;cursor:move;user-select:none');
     const icon = (t, tip) => { const b = el('button', 'width:28px;height:28px;flex:none;border:0;border-radius:6px;background:rgba(255,255,255,.18);color:#fff;font:700 15px/1 sans-serif;cursor:pointer;padding:0', t); b.title = tip; b.onmousedown = (e) => e.stopPropagation(); return b; };
     // ←: 보통은 메뉴로. 채우기를 마친 화면에서는 같은 파일로 과목 고르기로 돌아간다(panel.__back).
@@ -484,12 +485,12 @@
     fold.onclick = () => { panel.style.display = 'none'; showFab(true); };
     head.onmousedown = (e) => {
       const r = panel.getBoundingClientRect();
-      const dx = e.clientX - r.left, dy = e.clientY - r.top;
+      const dx = e.clientX - r.left, dy = r.bottom - e.clientY;
       const move = (ev) => {
         const left = Math.max(0, Math.min(window.innerWidth - 120, ev.clientX - dx)) + 'px';
-        const top = Math.max(0, Math.min(window.innerHeight - 44, ev.clientY - dy)) + 'px';
-        Object.assign(panel.style, { left, top, right: 'auto', bottom: 'auto' });
-        lastPos = { left, top };
+        const bottom = Math.max(0, Math.min(window.innerHeight - 44, window.innerHeight - ev.clientY - dy)) + 'px';
+        Object.assign(panel.style, { left, bottom, right: 'auto', top: 'auto' });
+        lastPos = { left, bottom };
       };
       const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
       document.addEventListener('mousemove', move);
@@ -508,32 +509,17 @@
     d.append(b);
     return d;
   }
-  // 채운 뒤: 창을 오른쪽 아래 작은 띠로 줄여 나이스 화면(교과 고르기 목록 등)을 가리지 않게 한다.
-  // 나이스에서 교과를 바꿔 조회하면 이 창이 저절로 그 교과로 다시 펼쳐진다(followNeis). 띠의 ▢로도 펼친다.
-  function nextSubject(body, reopen, label) {
-    const panel = body.parentElement;
-    panel.__back = reopen;
-    const head = panel.firstChild;
-    const titleEl = [...head.children].find((c) => c.tagName === 'DIV');
-    const saved = { style: panel.style.cssText, title: titleEl ? titleEl.textContent : '' };
-    body.style.display = 'none';
-    Object.assign(panel.style, { left: 'auto', top: 'auto', right: '20px', bottom: '20px', width: 'auto', maxWidth: '420px' });
-    if (titleEl) titleEl.textContent = `✔ ${label} 채웠어요`;
-    // 띠 아래 짧은 안내: 처음 쓰는 선생님도 다음에 할 일을 알 수 있게
-    const guide = rich('div', 'padding:8px 12px;font-size:13px;line-height:1.7;background:#fff8ef', '① 화면을 확인하고 나이스 [저장]\n② 다음 교과: 나이스에서 교과를 바꾸고 [조회] → 이 창이 다시 열려요');
-    guide.style.whiteSpace = 'pre-line';
-    panel.append(guide);
-    const grow = el('button', 'width:28px;height:28px;flex:none;border:0;border-radius:6px;background:rgba(255,255,255,.18);color:#fff;font:700 15px/1 sans-serif;cursor:pointer;padding:0', '▢');
-    grow.title = '펼치기';
-    grow.onmousedown = (e) => e.stopPropagation();
-    grow.onclick = () => {
-      panel.style.cssText = saved.style;
-      body.style.display = '';
-      if (titleEl) titleEl.textContent = saved.title;
-      guide.remove();
-      grow.remove();
-    };
-    head.insertBefore(grow, head.lastChild);
+  // 채우기 버튼 줄: 평가 항목이 많아 창 안이 넘쳐도 창 맨 아래에 붙어 늘 보인다.
+  function stickyBar(...buttons) {
+    const bar = el('div', 'position:sticky;bottom:-12px;margin:8px -16px -12px;padding:10px 16px 12px;background:#fff;border-top:1px solid #eee');
+    bar.append(...buttons);
+    return bar;
+  }
+  // 채운 뒤: 짧은 안내만 남겨 창이 저절로 낮아진다(아래 끝은 그대로라 나이스 교과 목록을 가리지 않는다).
+  // 나이스에서 교과를 바꿔 조회하면 이 창이 저절로 그 교과로 다시 열린다(followNeis).
+  function nextSubject(body, reopen) {
+    body.parentElement.__back = reopen;
+    body.append(rich('div', 'margin-top:8px', '다음 교과: 나이스에서 교과를 바꾸고 [조회] → 이 창이 다시 열려요'));
   }
   // 웹앱에서 자료 받기: 웹앱 주소의 중계 창을 열고, 선생님이 그 창에서 학급을 골라 [보내기]를 누르면 받는다.
   // 중계 창에는 화면 종류와 교과 이름만 알려 준다. 받은 자료는 엑셀에서 읽은 것과 같은 모양(시트 이름·줄·칸).
@@ -715,7 +701,7 @@
       over.append(box, document.createTextNode(' 이미 입력된 글도 엑셀 내용으로 바꾸기'));
       const summary = el('div', 'margin:8px 0;padding:8px;background:#f7f7f7;border-radius:8px;white-space:pre-line');
       const go = el('button', 'padding:8px 14px;border-radius:8px;border:0;background:#1f7a3a;color:#fff;font-weight:700;cursor:pointer', '나이스 화면에 채우기');
-      body.append(row, over, summary, go);
+      body.append(row, over, summary, stickyBar(go));
       let cur;
       const update = () => {
         // 다른 과목 시트를 고르면 채우지 않는다(나이스 교과를 바꾸면 이 창이 저절로 다시 읽는다)
