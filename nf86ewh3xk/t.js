@@ -304,7 +304,7 @@
       if (titleEl) titleEl.textContent = `🥭 교과별 평가 · ${fresh.subject} (학생 ${fresh.numbers.size}명 · 평가 ${fresh.items.length}개)`;
       showMatch(app, fresh, sheets, panel, body, fileName);
     };
-    body.append(sheetRow, table, over, summary, stickyBar(go, reread));
+    body.append(sheetRow, table, over, summary, stickyBar(reread, go));
     let choice = [];
     const sheetOk = () => norm(sheets[si].name).startsWith(subj);
     // 창을 연 뒤 나이스에서 교과를 바꿔 조회했으면 줄 위치가 달라져 채우면 안 된다
@@ -511,7 +511,7 @@
   }
   // 채우기 버튼 줄: 평가 항목이 많아 창 안이 넘쳐도 창 맨 아래에 붙어 늘 보인다.
   function stickyBar(...buttons) {
-    const bar = el('div', 'position:sticky;bottom:-12px;margin:8px -16px -12px;padding:10px 16px 12px;background:#fff;border-top:1px solid #eee');
+    const bar = el('div', 'position:sticky;bottom:-12px;margin:8px -16px -12px;padding:10px 16px 12px;background:#fff;border-top:1px solid #eee;display:flex;justify-content:flex-end;align-items:center;gap:6px');
     bar.append(...buttons);
     return bar;
   }
