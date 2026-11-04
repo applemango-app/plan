@@ -22,33 +22,56 @@
 <a class="btn" id="bm" href="#">🥭 애플망고 나이스</a>
 <ol>
   <li>즐겨찾기 줄이 안 보이면 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>를 누르세요.</li>
-  <li>나이스 화면에서 <b>🥭 애플망고 나이스</b>를 누르면 초록 띠 "✔ 애플망고 연결됨 · 서명 확인"이 나와야 해요.</li>
+  <li>나이스 화면을 열고 [조회]한 뒤 <b>🥭 애플망고 나이스</b>를 누르세요.</li>
+  <li>인터넷이 막힌 곳(EVPN 접속 등)에서도 엑셀로 넣을 수 있도록, 도우미가 버튼 안에도 들어 있어요. 🥭 창에 "즐겨찾기 버튼이 오래됐어요"가 나오면 이 페이지에서 버튼을 다시 끌어다 놓으세요.</li>
 </ol>
+<p class="note" id="ver"></p>
 
 <h2>서명 틀림 시험 (시험이 끝나면 지워 주세요)</h2>
 <a class="btn test" id="bad" href="#">🧪 서명 틀림 시험</a>
 <p>나이스 화면에서 누르면 빨간 띠 "⛔ 서명이 맞지 않아 실행하지 않았어요"가 나와야 성공이에요. 노란 띠가 나오면 실패예요.</p>
-<p class="note">버튼은 이 사이트에서 스크립트를 받아 와, 개발자만 가진 열쇠로 서명된 것인지 확인한 뒤에만 실행해요. 시험판은 화면 제목과 안내 띠만 바꾸고, 나이스의 값은 읽거나 바꾸지 않아요.</p>
+<p class="note">버튼은 이 사이트에서 최신 도우미를 받아 와, 개발자만 가진 열쇠로 서명된 것인지 확인한 뒤에만 실행해요. 받아 올 수 없으면(인터넷이 막힘) 버튼 안에 넣어 둔 도우미로 실행해요. 도우미는 나이스 화면에 값을 채우기만 하고, 저장은 선생님이 직접 눌러요. 나이스의 정보는 밖으로 보내지 않아요.</p>
 <script>
   // 즐겨찾기 버튼 = 불러오기 + 서명 확인. 서명이 맞을 때만 실행한다. 공개 열쇠만 들어 있다.
+  // 최신 도우미(t.js)를 받아 오지 못하면(EVPN 등으로 인터넷이 막힘) 버튼 안에 넣어 둔 도우미(t.min.js, 설치할 때의 판)로 실행한다.
   var base = new URL('.', location.href).href;
-  function loader(file) {
-    return "(async()=>{const B='" + base + "',F='" + file + "',v='?v='+Date.now();" +
-      "const bar=(m)=>{const d=document.createElement('div');d.textContent=m;d.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#b3261e;color:#fff;font:600 15px sans-serif;padding:10px 18px;border-radius:8px;cursor:pointer';d.onclick=()=>d.remove();document.body.appendChild(d);setTimeout(()=>d.remove(),10000)};" +
-      "try{const g=(u)=>fetch(u,{cache:'no-store'}).then((r)=>{if(!r.ok)throw Error(r.status);return r.text()});" +
-      "const[t,s]=await Promise.all([g(B+F+v),g(B+F+'.sig'+v)]);" +
-      "const k=await crypto.subtle.importKey('jwk',{kty:'EC',crv:'P-256',x:'y_DoVDvkohnumeXcVOCXoDe2unow9PiXWn0f01DfuIs',y:'DI3_YZJFSEdMXyO4B7L3-UGKecf-lPLfmpAi2Qfj5gI'},{name:'ECDSA',namedCurve:'P-256'},false,['verify']);" +
+  function loader(file, embedded, embeddedVersion) {
+    var bar = "const bar=(m)=>{const d=document.createElement('div');d.textContent=m;d.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#b3261e;color:#fff;font:600 15px sans-serif;padding:10px 18px;border-radius:8px;cursor:pointer';d.onclick=()=>d.remove();document.body.appendChild(d);setTimeout(()=>d.remove(),10000)};";
+    var fallback = embedded
+      ? "globalThis.__APPLEMANGO_LOADER__={embedded:'" + embeddedVersion + "',offline:true};return (0,eval)(E);"
+      : "return bar('⛔ 애플망고: 불러오지 못했어요 ('+e.message+')');";
+    return "(async()=>{const B='" + base + "',F='" + file + "',v='?v='+Date.now()" + (embedded ? ",E=" + JSON.stringify(embedded) : "") + ";" + bar +
+      "let t,s;try{const c=new AbortController(),to=setTimeout(()=>c.abort(),6000);" +
+      "const g=(u)=>fetch(u,{cache:'no-store',signal:c.signal}).then((r)=>{if(!r.ok)throw Error(r.status);return r.text()});" +
+      "[t,s]=await Promise.all([g(B+F+v),g(B+F+'.sig'+v)]);clearTimeout(to)}catch(e){" + fallback + "}" +
+      "try{const k=await crypto.subtle.importKey('jwk',{kty:'EC',crv:'P-256',x:'y_DoVDvkohnumeXcVOCXoDe2unow9PiXWn0f01DfuIs',y:'DI3_YZJFSEdMXyO4B7L3-UGKecf-lPLfmpAi2Qfj5gI'},{name:'ECDSA',namedCurve:'P-256'},false,['verify']);" +
       "const sig=Uint8Array.from(atob(s.trim()),(c)=>c.charCodeAt(0));" +
       "if(!(await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},k,sig,new TextEncoder().encode(t))))return bar('⛔ 애플망고: 서명이 맞지 않아 실행하지 않았어요');" +
+      (embedded ? "globalThis.__APPLEMANGO_LOADER__={embedded:'" + embeddedVersion + "',offline:false};" : "") +
       "(0,eval)(t)}catch(e){bar('⛔ 애플망고: 불러오지 못했어요 ('+e.message+')')}})();";
   }
-  function setup(id, file) {
+  function setup(id, file, embedded, version) {
     var a = document.getElementById(id);
-    a.href = 'javascript:' + encodeURIComponent(loader(file));
+    a.href = 'javascript:' + encodeURIComponent(loader(file, embedded, version));
     a.addEventListener('click', function (e) { e.preventDefault(); });
   }
-  setup('bm', 't.js');
   setup('bad', 'bad.js');
+  // 버튼 안에 넣을 도우미와 그 판 날짜를 받아 와 버튼을 만든다. 만들기 전에는 끌어다 놓지 못하게 흐리게 둔다.
+  var bm = document.getElementById('bm');
+  bm.style.opacity = 0.4;
+  bm.addEventListener('click', function (e) { e.preventDefault(); });
+  Promise.all([
+    fetch('t.min.js?v=' + Date.now(), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw Error(r.status); return r.text(); }),
+    fetch('t.js?v=' + Date.now(), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw Error(r.status); return r.text(); }),
+  ]).then(function (res) {
+    var m = res[1].match(/const VERSION = '(\d{4}-\d{2}-\d{2})'/);
+    var version = m ? m[1] : '2000-01-01';
+    setup('bm', 't.js', res[0], version);
+    bm.style.opacity = 1;
+    document.getElementById('ver').textContent = '버튼 안에 넣는 도우미: ' + version + ' 판';
+  }).catch(function (err) {
+    document.getElementById('ver').textContent = '⛔ 버튼을 만들지 못했어요. 페이지를 새로 고쳐 주세요. (' + err.message + ')';
+  });
 </script>
 </body>
 </html>

@@ -6,6 +6,17 @@
 // 그 창에는 무엇을 원하는지(화면 종류·교과 이름)만 알려 준다 — 나이스의 학생 정보는 보내지 않는다.
 (() => {
   const PANEL_ID = 'applemango-panel';
+  // 도우미 판 날짜. 설치 페이지가 즐겨찾기 버튼 안에 이 판을 통째로 넣어 두고(인터넷이 막혔을 때 쓰려고), 날짜도 함께 적는다.
+  const VERSION = '2026-11-04';
+  // 즐겨찾기 버튼이 알려 주는 것: 버튼 안에 넣어 둔 판의 날짜, 지금 인터넷 없이 그 판으로 실행 중인지.
+  // 예전 버튼(안에 넣어 둔 판이 없는 버튼)은 아무것도 알려 주지 않는다.
+  const LOADER = globalThis.__APPLEMANGO_LOADER__ || null;
+  const OFFLINE = !!(LOADER && LOADER.offline);
+  const STALE_DAYS = 60;
+  const daysSince = (ymd) => (Date.now() - new Date(ymd + 'T00:00:00').getTime()) / 86400000;
+  // 인터넷이 될 때만: 버튼 안의 판이 없거나 오래됐으면 다시 설치를 권한다(인터넷이 막힌 곳에서도 최신 기능을 쓰게).
+  const STALE = !OFFLINE && (!LOADER || !LOADER.embedded || daysSince(LOADER.embedded) > STALE_DAYS);
+  const INSTALL_PAGE = 'https://applemango-app.github.io/plan/nf86ewh3xk/';
   // 애플망고 웹앱 주소. 정식 주소(도메인)가 정해지면 바꾼다. 지금은 선생님 PC에서 띄운 웹앱.
   const WEB_APP = 'http://localhost:8765';
 
@@ -469,7 +480,10 @@
   // [—]는 창을 숨기고 오른쪽 아래 🥭 버튼만 남긴다. 🥭를 누르면 하던 그대로 창이 다시 뜬다.
   let lastPos = null;
   function makePanel(title, isMenu) {
-    document.getElementById(PANEL_ID)?.remove();
+    // 앞 창의 높이에서 새 창의 높이로 부드럽게 바뀌게(아래 animateHeight)
+    const prev = document.getElementById(PANEL_ID);
+    const prevH = prev && prev.style.display !== 'none' ? prev.getBoundingClientRect().height : 0;
+    prev?.remove();
     showFab(false);
     const panel = el('div', 'position:fixed;bottom:60px;right:20px;width:520px;max-height:calc(100vh - 80px);display:flex;flex-direction:column;z-index:2147483646;background:#fff;color:#222;font:14px/1.5 "Malgun Gothic",sans-serif;border:2px solid #e8890c;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);overflow:hidden');
     panel.id = PANEL_ID;
@@ -483,8 +497,14 @@
     const fold = icon('—', '내리기 (🥭 버튼으로)');
     const close = icon('✕', '닫기');
     head.append(fold, close);
-    const body = el('div', 'padding:12px 16px;overflow:auto');
-    panel.append(head, body);
+    // 넘치면 창 안에서 스크롤한다. 내용(body)은 그 안에 담아, 내용의 높이가 바뀔 때만 창 높이를 움직인다.
+    const scroller = el('div', 'padding:12px 16px;overflow:auto;flex:1;min-height:0');
+    const body = el('div');
+    scroller.append(body);
+    panel.append(head);
+    for (const n of panelNotices()) panel.append(n);
+    panel.append(scroller);
+    animateHeight(panel, body, prevH);
     close.onclick = () => panel.remove();
     fold.onclick = () => { panel.style.display = 'none'; showFab(true); };
     head.onmousedown = (e) => {
@@ -520,6 +540,40 @@
 애플망고에서 ${subject} ${what}을(를) 먼저 만든 뒤 [다른 자료 가져오기]를 눌러 주세요.
 다른 교과를 넣으려면 나이스에서 교과를 바꾸고 [조회]를 누르세요.`;
   }
+  // 창 높이가 바뀔 때 0.2초 동안 부드럽게: 위치와 폭은 그대로, 높이만(아래 끝이 고정이라 위로 늘고 준다).
+  function animateHeight(panel, content, startH) {
+    if (typeof ResizeObserver === 'undefined' || !panel.animate) return;
+    let lastH = startH || 0, anim = null, seen = false;
+    const ro = new ResizeObserver(() => {
+      // 화면에 붙기 전에는 기다리고, 한 번 붙었다가 떨어지면(창 닫힘·새 창) 그만 본다
+      if (!panel.isConnected) { if (seen) ro.disconnect(); return; }
+      seen = true;
+      if (panel.style.display === 'none') return;
+      const from = anim ? panel.getBoundingClientRect().height : lastH;
+      if (anim) { anim.cancel(); anim = null; }
+      const to = panel.getBoundingClientRect().height;
+      lastH = to;
+      if (!from || Math.abs(from - to) < 4) return;
+      anim = panel.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: 200, easing: 'ease-out' });
+      anim.onfinish = () => { anim = null; };
+    });
+    ro.observe(content);
+  }
+  // 창 제목 아래 안내 띠: 인터넷 없이 실행 중(①), 즐겨찾기 버튼이 오래됨(③)
+  function panelNotices() {
+    const out = [];
+    if (OFFLINE) out.push(el('div', 'padding:6px 14px;background:#fff3bf;color:#5c4400;font-size:13px;font-weight:700', '🔌 인터넷 연결 없이 실행 중이에요. 엑셀 파일로만 넣을 수 있어요.'));
+    else if (STALE) {
+      const d = el('div', 'padding:6px 14px;background:#e7f1ff;color:#1c3d7a;font-size:13px', '🔄 즐겨찾기 버튼이 오래됐어요. ');
+      const a = el('a', 'color:#1c3d7a;font-weight:700', '[설치 페이지]');
+      a.href = INSTALL_PAGE;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      d.append(a, document.createTextNode('에서 버튼을 다시 끌어다 놓으면, 인터넷이 막혔을 때도 최신 기능을 쓸 수 있어요.'));
+      out.push(d);
+    }
+    return out;
+  }
   // 채우기 버튼 줄: 평가 항목이 많아 창 안이 넘쳐도 창 맨 아래에 붙어 늘 보인다.
   function stickyBar(...buttons) {
     const bar = el('div', 'position:sticky;bottom:-12px;margin:8px -16px -12px;padding:10px 16px 12px;background:#fff;border-top:1px solid #eee;display:flex;justify-content:flex-end;align-items:center;gap:6px');
@@ -529,7 +583,7 @@
   // 채운 뒤: 짧은 안내만 남겨 창이 저절로 낮아진다(아래 끝은 그대로라 나이스 교과 목록을 가리지 않는다).
   // 나이스에서 교과를 바꿔 조회하면 이 창이 저절로 그 교과로 다시 열린다(followNeis).
   function nextSubject(body, reopen) {
-    body.parentElement.__back = reopen;
+    body.closest('#' + PANEL_ID).__back = reopen;
     body.append(rich('div', 'margin-top:8px', '다음 교과: 나이스에서 교과를 바꾸고 [조회] → 이 창이 다시 열려요'));
   }
   // 웹앱에서 자료 받기: 웹앱 주소의 중계 창을 열고, 선생님이 그 창에서 학급을 골라 [보내기]를 누르면 받는다.
@@ -592,9 +646,14 @@
     const btn = 'padding:8px 14px;border-radius:8px;font-weight:700;cursor:pointer;margin-right:8px';
     const web = el('button', btn + ';border:0;background:#2f6bff;color:#fff', '🌐 웹앱에서 가져오기');
     const pick = el('button', btn + ';border:1px solid #b77a00;background:#f2a516', '📄 엑셀 고르기');
-    body.append(el('div', 'margin-bottom:8px', hint + ' 파일은 이 컴퓨터 안에서만 읽어요.'), web, pick,
-      el('div', 'margin-top:6px;color:#666;font-size:12px', '웹앱: 같은 크롬 창에서 애플망고 웹앱이 열려 있어야 해요. 나이스 화면의 학급에 맞는 자료를 저절로 골라 와요.'));
-    if (key) web.onclick = async () => {
+    body.append(el('div', 'margin-bottom:8px', hint + ' 파일은 이 컴퓨터 안에서만 읽어요.'), web, pick);
+    if (OFFLINE) {
+      web.disabled = true;
+      web.style.opacity = 0.45;
+      web.style.cursor = 'default';
+      body.append(rich('div', 'margin-top:6px;color:#666;font-size:12px;white-space:pre-line', '지금은 인터넷이 막혀 있어 웹앱을 열 수 없어요. (EVPN 접속 중)\n학교에서 미리 엑셀로 내보내 두면 여기서 넣을 수 있어요.\n💡 엑셀은 폰 앱 [내보내기]나, 학교 PC의 웹앱에서 만들 수 있어요.'));
+    } else body.append(el('div', 'margin-top:6px;color:#666;font-size:12px', '웹앱: 같은 크롬 창에서 애플망고 웹앱이 열려 있어야 해요. 나이스 화면의 학급에 맞는 자료를 저절로 골라 와요.'));
+    if (key && !OFFLINE) web.onclick = async () => {
       web.disabled = true;
       web.textContent = '웹앱에서 받는 중…';
       try {
@@ -621,7 +680,7 @@
         web.textContent = '🌐 웹앱에서 가져오기';
       }
     };
-    else web.style.display = 'none';
+    else if (!key) web.style.display = 'none';
     pick.onclick = () => {
       const input = el('input');
       input.type = 'file';
@@ -1038,7 +1097,7 @@ ${sv.err}
     { re: /els_sdlbg00_m00$/, ds: 'dsScrgRec', grid: 'grdMain', label: '행동특성 및 종합의견', path: '학급담임 › 학생생활 › 행동특성및종합의견 › [조회]를 눌러 주세요', open: (a) => openTextPanel(a, 'behavior', '행동특성 및 종합의견') },
     { re: /els_sdlbg00_m01$/, ds: 'dsStu', grid: 'grdStu', dirtyDs: 'dsGicRecStu', label: '누가기록', path: '학급담임 › 학생생활 › 행동특성및종합의견 › 누가기록 › [조회]를 눌러 주세요', open: (a) => openRecordPanel(a) },
   ];
-  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { fromWebApp, readXlsx, parseResultSheet, parseBehaviorSheet, parseSummarySheet, parseRecordSheet, toYmd, planText, autoMatch, plan, norm }; return; }
+  if (globalThis.__APPLEMANGO_TEST__) { globalThis.__APPLEMANGO_TEST__ = { VERSION, fromWebApp, readXlsx, parseResultSheet, parseBehaviorSheet, parseSummarySheet, parseRecordSheet, toYmd, planText, autoMatch, plan, norm }; return; }
   if (!window.cpr) return banner('나이스 화면에서 눌러 주세요', '#b3261e');
   // 탭이 화면에 보이는지: 그 화면 표의 실제 크기가 0이 아니면 보이는 탭
   const shown = (a, gridId) => { try { const r = a.lookup(gridId).getActualRect(); return r.width > 0 && r.height > 0; } catch (_) { return false; } };
