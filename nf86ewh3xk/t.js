@@ -398,7 +398,7 @@
       body.textContent = '';
       body.append(el('div', 'font-size:15px;font-weight:700;color:#1f7a3a;margin-bottom:6px', `✔ ${neis.subject} ${current.changes.length}칸을 채웠어요.`),
         rich('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
-      nextSubject(body, () => openPanel(app));
+      nextSubject(body, () => openPanel(app), `${neis.subject} ${current.changes.length}칸`);
     };
     choice = autoMatch(neis.items, sheets[si].parsed.columns);
     render();
@@ -508,10 +508,27 @@
     d.append(b);
     return d;
   }
-  // 채운 뒤: 나이스에서 교과를 바꿔 조회하면 이 창이 저절로 그 교과로 바뀐다(followNeis). 같은 자료로 이어 넣는다.
-  function nextSubject(body, reopen) {
-    body.append(rich('div', 'margin-top:12px;color:#2f6bff', '다음 교과: 나이스에서 [저장] → 교과 바꾸고 [조회]'));
-    body.parentElement.__back = reopen;
+  // 채운 뒤: 창을 오른쪽 아래 작은 띠로 줄여 나이스 화면(교과 고르기 목록 등)을 가리지 않게 한다.
+  // 나이스에서 교과를 바꿔 조회하면 이 창이 저절로 그 교과로 다시 펼쳐진다(followNeis). 띠의 ▢로도 펼친다.
+  function nextSubject(body, reopen, label) {
+    const panel = body.parentElement;
+    panel.__back = reopen;
+    const head = panel.firstChild;
+    const titleEl = [...head.children].find((c) => c.tagName === 'DIV');
+    const saved = { style: panel.style.cssText, title: titleEl ? titleEl.textContent : '' };
+    body.style.display = 'none';
+    Object.assign(panel.style, { left: 'auto', top: 'auto', right: '20px', bottom: '20px', width: 'auto', maxWidth: '420px' });
+    if (titleEl) titleEl.textContent = `✔ ${label} 채움 · 확인 후 [저장]`;
+    const grow = el('button', 'width:28px;height:28px;flex:none;border:0;border-radius:6px;background:rgba(255,255,255,.18);color:#fff;font:700 15px/1 sans-serif;cursor:pointer;padding:0', '▢');
+    grow.title = '펼치기';
+    grow.onmousedown = (e) => e.stopPropagation();
+    grow.onclick = () => {
+      panel.style.cssText = saved.style;
+      body.style.display = '';
+      if (titleEl) titleEl.textContent = saved.title;
+      grow.remove();
+    };
+    head.insertBefore(grow, head.lastChild);
   }
   // 웹앱에서 자료 받기: 웹앱 주소의 중계 창을 열고, 선생님이 그 창에서 학급을 골라 [보내기]를 누르면 받는다.
   // 중계 창에는 화면 종류와 교과 이름만 알려 준다. 받은 자료는 엑셀에서 읽은 것과 같은 모양(시트 이름·줄·칸).
@@ -728,7 +745,7 @@
         for (const c of cur.changes) ds.setValue(c.r, cfg.textCol, c.text);
         try { app.lookup(cfg.grid).redraw(); } catch (_) {}
         done(body, `✔ ${subject ? subject + ' ' : ''}${cur.changes.length}명의 글을 채웠어요.`);
-        if (kind === 'subjText') nextSubject(body, () => openTextPanel(app, kind, title));
+        if (kind === 'subjText') nextSubject(body, () => openTextPanel(app, kind, title), `${subject} ${cur.changes.length}명`);
       };
       update();
     }, kind, subject, new Map(rows.map((x) => [x.no, x.name])));
