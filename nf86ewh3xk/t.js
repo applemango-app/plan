@@ -17,8 +17,8 @@
   // 인터넷이 될 때만: 버튼 안의 판이 없거나 오래됐으면 다시 설치를 권한다(인터넷이 막힌 곳에서도 최신 기능을 쓰게).
   const STALE = !OFFLINE && (!LOADER || !LOADER.embedded || daysSince(LOADER.embedded) > STALE_DAYS);
   const INSTALL_PAGE = 'https://applemango-app.github.io/plan/nf86ewh3xk/';
-  // 애플망고 웹앱 주소 (회사 도메인, Cloudflare). 중계 창은 .html 없는 주소로 열어 넘겨주기를 한 번 줄인다.
-  const WEB_APP = 'https://applemango.app';
+  // 애플망고 웹앱 주소 (회사 도메인 app.applemango.app, Cloudflare. applemango.app은 홈페이지). 중계 창은 .html 없는 주소로 열어 넘겨주기를 한 번 줄인다.
+  const WEB_APP = 'https://app.applemango.app';
 
   // ---------- xlsx 읽기 (외부 라이브러리 없이: zip 목차 → deflate 풀기 → XML) ----------
   async function unzip(buf) {
