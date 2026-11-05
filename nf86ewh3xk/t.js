@@ -956,10 +956,23 @@
       const stop = el('button', btnStyle('#b3261e') + ';display:none', '멈추기');
       body.append(list, msg, one, allBtn, stop, confirmBox);
       let idx = 0, running = false, stopReq = false;
+      // 한 명씩 넣은 뒤 아직 저장도 되돌리기도 하지 않은 학생 { no, inv, keys }
+      let pending = null;
+      const isDone = (n) => /^(저장됨|모두 이미)/.test(status.get(n));
       const say = (t, bad) => { setRich(msg, t); msg.style.color = bad ? '#b3261e' : '#222'; };
       const drawList = () => {
         list.textContent = '';
-        for (const n of todo) list.append(el('div', `padding:2px 4px;${n === todo[idx] ? 'background:#fff7e6;font-weight:700' : ''}`, `${n}번 · ${byNo.get(n).length}건 · ${status.get(n)}`));
+        todo.forEach((n, i) => {
+          const row = el('div', `padding:2px 4px;border-radius:4px;cursor:pointer;${n === todo[idx] ? 'background:#fff7e6;font-weight:700' : ''}`, `${n}번 · ${byNo.get(n).length}건 · ${status.get(n)}`);
+          row.title = '눌러서 이 학생 고르기';
+          // 목록에서 학생을 눌러 고른다(지나간 학생에게도 돌아갈 수 있게)
+          row.onclick = () => {
+            if (running) return;
+            if (pending || dirtyRows()) return say('⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]이나 [조회]를 먼저 눌러 주세요.', true);
+            idx = i; say(''); drawList();
+          };
+          list.append(row);
+        });
         one.textContent = idx < todo.length ? `${todo[idx]}번 학생만 넣기 (저장은 직접)` : '모두 끝났어요';
         one.disabled = allBtn.disabled = running || idx >= todo.length;
         one.style.opacity = allBtn.style.opacity = one.disabled ? 0.5 : 1;
@@ -980,7 +993,7 @@
         const toAdd = [];
         for (const x of byNo.get(no)) if (take(recKey(x.date, x.text))) skipped++; else toAdd.push(x);
         let added = 0;
-        const addedDates = [];
+        const addedDates = [], addedKeys = [];
         for (const x of toAdd) {
           const before = rec.getRowCount();
           app.lookup('btnAdd').click();
@@ -989,11 +1002,42 @@
           rec.setValue(r, 'ghvrDevEnfcYmd', x.date);
           rec.setValue(r, 'ghvrDevCn', x.text);
           addedDates.push(x.date);
+          addedKeys.push(recKey(x.date, x.text));
           added++;
         }
         try { app.lookup('grdGicRecStu').redraw(); } catch (_) {}
-        return { added, skipped, total: rec.getRowCount(), addedDates };
+        return { added, skipped, total: rec.getRowCount(), addedDates, addedKeys };
       }
+
+      // 한 명씩 넣은 학생을 지켜본다: 넣은 줄이 모두 저장되면 다음 학생으로, 저장하지 않고 [조회] 등으로
+      // 되돌려지면 그 학생에게 머물러 다시 넣을 수 있게 한다. 알 수 없으면 머문다(다시 넣어도 이미 있는 기록은 건너뛴다).
+      const checkPending = () => {
+        if (!pending || running || dirtyRows()) return;
+        let saved = false;
+        try {
+          if (app.lookup('dmSearch').getValue('stuInvlNo') === pending.inv && rec.getRowCount()) {
+            const have = new Map();
+            for (let r = 0; r < rec.getRowCount(); r++) {
+              const k = recKey(String(rec.getValue(r, 'ghvrDevEnfcYmd') || ''), rec.getValue(r, 'ghvrDevCn'));
+              have.set(k, (have.get(k) || 0) + 1);
+            }
+            saved = pending.keys.every((k) => { const n = have.get(k) || 0; if (!n) return false; have.set(k, n - 1); return true; });
+          }
+        } catch (_) {}
+        const no = pending.no;
+        pending = null;
+        if (saved) {
+          status.set(no, status.get(no).replace('넣음', '저장됨 ✓'));
+          if (todo[idx] === no) idx++;
+          say(`✔ ${no}번 저장됐어요.${idx < todo.length ? ` 다음은 ${todo[idx]}번이에요.` : ''}`);
+        } else {
+          status.set(no, '대기');
+          idx = todo.indexOf(no);
+          say(`${no}번 기록을 저장하지 않고 되돌렸어요. 다시 넣을 수 있어요.`);
+        }
+        drawList();
+      };
+      const watch = setInterval(() => { if (!panel.isConnected) return clearInterval(watch); checkPending(); }, 600);
 
       // 저장 누르기 → '저장되었습니다' 알림의 [확인]을 눌러 닫기 → 모든 줄이 저장된 상태인지 확인
       // 나이스가 [확인]/[취소]를 묻는 창(예: 결석일)을 띄우면 선생님이 고를 때까지 기다린다.
@@ -1041,21 +1085,31 @@
       }
 
       one.onclick = async () => {
-        if (dirtyRows()) return say('⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]을 누른 뒤 다시 눌러 주세요.', true);
-        if (idx > 0 && status.get(todo[idx - 1]).startsWith('넣음')) status.set(todo[idx - 1], status.get(todo[idx - 1]).replace('넣음', '저장됨 ✓'));
+        if (pending || dirtyRows()) return say('⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]이나 [조회]를 먼저 눌러 주세요.', true);
         const no = todo[idx];
         running = true; drawList(); say(`${no}번 학생을 고르는 중…`);
         const r = await fillStudent(no);
         running = false;
-        if (r.err) { drawList(); return say('⚠ ' + r.err + `. 학생 목록에서 ${no}번을 직접 클릭한 뒤 다시 눌러 주세요.`, true); }
+        if (r.err) { drawList(); return say('⚠ ' + r.err + `. 나이스 학생 목록에서 ${no}번을 직접 클릭한 뒤 다시 눌러 주세요.`, true); }
         status.set(no, r.added ? `넣음 ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}` : `모두 이미 있음 (${r.skipped}건)`);
-        idx++;
-        say(r.added ? `✔ ${no}번에 ${r.added}건을 넣었어요. 화면에서 확인하고 나이스 [저장]을 누른 뒤 다음 학생으로 가세요.` : `${no}번은 넣을 기록이 없어요(모두 이미 있음).`);
+        if (r.added) {
+          // 저장하면 다음 학생으로, 저장하지 않고 [조회]하면 이 학생에게 머문다(checkPending)
+          pending = { no, inv: roster.get(no).inv, keys: r.addedKeys };
+          say(`✔ ${no}번에 ${r.added}건을 넣었어요. 화면에서 확인하고 나이스 [저장]을 누르면 다음 학생으로 넘어가요.\n저장하지 않으려면 [조회]를 누르면 돼요 — 이 학생을 다시 넣을 수 있어요.`);
+        } else {
+          idx++;
+          say(`${no}번은 넣을 기록이 없어요(모두 이미 있음).`);
+        }
         drawList();
       };
 
       allBtn.onclick = () => {
-        if (dirtyRows()) return say('⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]이나 [조회]를 먼저 눌러 주세요.', true);
+        if (pending || dirtyRows()) return say('⚠ 지금 학생의 기록을 아직 저장하지 않았어요. 나이스 [저장]이나 [조회]를 먼저 눌러 주세요.', true);
+        // 아직 끝나지 않은 첫 학생부터(목록에서 뒤쪽 학생을 골라 두었어도 앞 학생을 빠뜨리지 않게)
+        const first = todo.findIndex((n) => !isDone(n));
+        if (first < 0) return say('모든 학생이 이미 끝났어요.');
+        idx = first;
+        drawList();
         const rest = todo.slice(idx);
         const cnt = rest.reduce((a, n) => a + byNo.get(n).length, 0);
         confirmBox.textContent = '';
@@ -1077,17 +1131,18 @@
       const md = (d) => `${Number(d.slice(4, 6))}월 ${Number(d.slice(6, 8))}일`;
       const cont = el('button', btnStyle('#1f7a3a') + ';display:none', '계속 (다음 학생부터)');
       body.insertBefore(cont, confirmBox);
-      let addedAll = 0;
-      const cancelledNos = [];
+      let addedAll = 0, checkedAll = 0;
+      const cancelledNos = [], savedNos = [];
 
       async function runAll() {
         running = true; stopReq = false; cont.style.display = 'none'; drawList();
         while (idx < todo.length) {
-          if (stopReq) { say(`멈췄어요. 여기까지 저장했어요. (${idx}/${todo.length}명)`); break; }
+          if (stopReq) { say(`멈췄어요. ${checkedAll}명을 확인했고, 그중 ${savedNos.length}명에게 새 기록 ${addedAll}건을 넣고 저장했어요.`); break; }
           const n = todo[idx];
           say(`${n}번 진행 중… (${idx + 1}/${todo.length}명)`);
           const r = await fillStudent(n);
           if (r.err) { say('⚠ ' + r.err + '. 여기서 멈췄어요.', true); break; }
+          checkedAll++;
           if (r.added) {
             const att = atteDates(n);
             const hit = [...new Set(r.addedDates.filter((d) => att.has(d)))].map(md);
@@ -1126,12 +1181,18 @@ ${sv.err}
             }
             status.set(n, `저장됨 ✓ ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}${sv.asked ? ' · 확인 후 저장' : ''}`);
             addedAll += r.added;
+            savedNos.push(n);
           } else status.set(n, `모두 이미 있음 (${r.skipped}건)`);
           idx++;
           drawList();
         }
         running = false;
-        if (idx >= todo.length) say(`✔ 끝났어요. 학생 ${todo.length}명, 새 기록 ${addedAll}건을 저장했어요.` +
+        // 몇 명을 '확인'했고 몇 명에게 실제로 새 기록을 넣어 저장했는지 나눠 알린다
+        if (idx >= todo.length) say((addedAll
+          ? `✔ 끝났어요. ${checkedAll}명을 확인해 ${savedNos.length}명에게 새 기록 ${addedAll}건을 넣고 저장했어요.`
+          : `✔ 끝났어요. ${checkedAll}명을 확인했는데 새로 넣을 기록이 없었어요.`) +
+          (checkedAll - savedNos.length - cancelledNos.length > 0 && addedAll ? `
+나머지 ${checkedAll - savedNos.length - cancelledNos.length}명은 기록이 이미 나이스에 있어 그대로 두었어요.` : '') +
           (cancelledNos.length ? `
 ⚠ [취소]해서 저장하지 않은 학생: ${cancelledNos.map((x) => x + '번').join(', ')} — 날짜를 고쳐 따로 넣어 주세요.` : ''), cancelledNos.length > 0);
         drawList();
