@@ -510,7 +510,7 @@
     if (lastPos) Object.assign(panel.style, { left: lastPos.left, bottom: lastPos.bottom, right: 'auto', top: 'auto' });
     const head = el('div', 'display:flex;align-items:center;gap:6px;padding:8px 10px;background:#e8890c;color:#fff;cursor:move;user-select:none');
     const icon = (t, tip) => { const b = el('button', 'width:28px;height:28px;flex:none;border:0;border-radius:6px;background:rgba(255,255,255,.18);color:#fff;font:700 15px/1 sans-serif;cursor:pointer;padding:0', t); b.title = tip; b.onmousedown = (e) => e.stopPropagation(); return b; };
-    // ←: 보통은 메뉴로. 채우기를 마친 화면에서는 같은 파일로 과목 고르기로 돌아간다(panel.__back).
+    // ←: 바로 전 단계로. 보통은 메뉴, 채우기를 마친 화면에서는 같은 자료로 그 메뉴의 채우기 화면(panel.__back).
     if (!isMenu) { const back = icon('←', '뒤로'); back.onclick = () => (panel.__back ? panel.__back() : openMenu()); head.append(back); }
     head.append(el('div', 'flex:1;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis', title));
     const fold = icon('—', '내리기 (🥭 버튼으로)');
@@ -858,6 +858,8 @@
         for (const c of cur.changes) ds.setValue(c.r, cfg.textCol, c.text);
         try { app.lookup(cfg.grid).redraw(); } catch (_) {}
         done(body, `✔ ${subject ? subject + ' ' : ''}${cur.changes.length}명의 글을 채웠어요.`);
+        // ←: 바로 전 단계(이 메뉴의 채우기 화면)로
+        panel.__back = () => openTextPanel(app, kind, title);
         const filledNow = cur.changes;
         watchReset(panel, () => {
           const d = app.lookup(cfg.ds);
