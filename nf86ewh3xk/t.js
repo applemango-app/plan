@@ -427,6 +427,12 @@
       body.append(el('div', 'font-size:15px;font-weight:700;color:#1f7a3a;margin-bottom:6px', `✔ ${neis.subject} ${current.changes.length}칸을 채웠어요.`),
         rich('div', null, '화면에서 확인한 뒤 나이스의 [저장]을 눌러 주세요. 저장하지 않고 되돌리려면 [조회]를 다시 누르면 돼요.'));
       nextSubject(body, () => openPanel(app), `${neis.subject} ${current.changes.length}칸`);
+      const filledNow = current.changes;
+      watchReset(body.closest('#' + PANEL_ID), () => {
+        const d = app.lookup('dsMain');
+        if (!d.getRowCount()) return true; // 조회 중(잠깐 비어 있음)
+        return filledNow.some(({ r, opt }) => r < d.getRowCount() && d.getValue(r, 'evlCtrCd') === opt.cd);
+      }, () => openPanel(app));
     };
     choice = autoMatch(neis.items, sheets[si].parsed.columns);
     render();
@@ -746,6 +752,24 @@
     obs.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });
   }
 
+  // 채운 뒤 선생님이 저장하지 않고 [조회]를 눌러 되돌리면(채운 칸이 모두 원래대로 돌아가면) 창도 처음 상태로 연다.
+  // 한두 칸을 손으로 고친 것은 되돌림으로 보지 않는다. stillFilled(): 채운 칸 중 하나라도 그대로면 true.
+  function watchReset(panel, stillFilled, reopen) {
+    let t = 0;
+    const obs = new MutationObserver((muts) => {
+      if (!panel.isConnected) return obs.disconnect();
+      if (t || muts.every((m) => panel.contains(m.target))) return;
+      t = setTimeout(() => {
+        t = 0;
+        if (!panel.isConnected) return obs.disconnect();
+        let filled = true;
+        try { filled = stillFilled(); } catch (_) { return; }
+        if (!filled) { obs.disconnect(); reopen(); }
+      }, 400);
+    });
+    obs.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });
+  }
+
   function openTextPanel(app, kind, title) {
     const cfg = TEXT_SCREENS[kind];
     const ds = app.lookup(cfg.ds);
@@ -834,6 +858,12 @@
         for (const c of cur.changes) ds.setValue(c.r, cfg.textCol, c.text);
         try { app.lookup(cfg.grid).redraw(); } catch (_) {}
         done(body, `✔ ${subject ? subject + ' ' : ''}${cur.changes.length}명의 글을 채웠어요.`);
+        const filledNow = cur.changes;
+        watchReset(panel, () => {
+          const d = app.lookup(cfg.ds);
+          if (!d.getRowCount()) return true; // 조회 중(잠깐 비어 있음)
+          return filledNow.some((c) => c.r < d.getRowCount() && String(d.getValue(c.r, cfg.textCol) || '').trim() === c.text);
+        }, () => openTextPanel(app, kind, title));
         if (kind === 'subjText') nextSubject(body, () => openTextPanel(app, kind, title), `${subject} ${cur.changes.length}명`);
       };
       update();
