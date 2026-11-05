@@ -7,7 +7,7 @@
 (() => {
   const PANEL_ID = 'applemango-panel';
   // 도우미 판 날짜. 설치 페이지가 즐겨찾기 버튼 안에 이 판을 통째로 넣어 두고(인터넷이 막혔을 때 쓰려고), 날짜도 함께 적는다.
-  const VERSION = '2026-11-04';
+  const VERSION = '2026-11-05';
   // 즐겨찾기 버튼이 알려 주는 것: 버튼 안에 넣어 둔 판의 날짜, 지금 인터넷 없이 그 판으로 실행 중인지.
   // 예전 버튼(안에 넣어 둔 판이 없는 버튼)은 아무것도 알려 주지 않는다.
   const LOADER = globalThis.__APPLEMANGO_LOADER__ || null;
@@ -189,8 +189,11 @@
   }
 
   // 글 칸 채우기 계산. rows: [{ r, no, name, cur }], source: Map(번호 → { name, text })
-  function planText(rows, source, overwrite) {
-    const stats = { fill: 0, same: 0, keep: 0, noText: 0 };
+  // mode: 'keep'(이미 글이 있으면 그대로) | 'append'(기존 글 뒤에 이어 쓰기, 전입생 등) | 'replace'(바꾸기). true/false는 replace/keep.
+  function planText(rows, source, mode) {
+    if (mode === true) mode = 'replace';
+    if (!mode) mode = 'keep';
+    const stats = { fill: 0, same: 0, keep: 0, append: 0, noText: 0, hasOther: 0 };
     const changes = [];
     const numbers = new Set(rows.map((x) => x.no));
     for (const row of rows) {
@@ -199,7 +202,17 @@
       if (!text) { stats.noText++; continue; }
       const cur = String(row.cur || '').trim();
       if (cur === text) { stats.same++; continue; }
-      if (cur && !overwrite) { stats.keep++; continue; }
+      if (cur) {
+        stats.hasOther++;
+        if (mode === 'keep') { stats.keep++; continue; }
+        if (mode === 'append') {
+          // 이미 한 번 이어 쓴 글이면 또 붙이지 않는다(두 번 눌러도 중복되지 않게)
+          if (cur.endsWith(text)) { stats.same++; continue; }
+          stats.append++;
+          changes.push({ r: row.r, text: cur + ' ' + text });
+          continue;
+        }
+      }
       stats.fill++;
       changes.push({ r: row.r, text });
     }
@@ -765,10 +778,22 @@
       sel.value = si;
       const row = el('div', null, '시트:');
       row.append(sel);
-      const over = el('label', 'display:block;margin:10px 0');
-      const box = el('input');
-      box.type = 'checkbox';
-      over.append(box, document.createTextNode(' 나이스에 이미 있는 글도 애플망고 글로 바꾸기'));
+      // 나이스에 이미 다른 글이 있는 학생(전입생 등)을 어떻게 할지
+      const over = el('div', 'margin:10px 0');
+      over.append(el('div', 'margin-bottom:4px', '나이스에 이미 다른 글이 있는 학생은:'));
+      const modeName = 'am-mode-' + Date.now();
+      let mode = 'keep';
+      for (const [v, label] of [['keep', '그대로 두기'], ['append', '기존 글 뒤에 이어 쓰기 (전입생 등)'], ['replace', '애플망고 글로 바꾸기']]) {
+        const lab = el('label', 'display:block;margin:2px 0 2px 6px;cursor:pointer');
+        const rb = el('input');
+        rb.type = 'radio';
+        rb.name = modeName;
+        rb.value = v;
+        rb.checked = v === mode;
+        rb.onchange = () => { mode = v; update(); };
+        lab.append(rb, document.createTextNode(' ' + label));
+        over.append(lab);
+      }
       const summary = el('div', 'margin:8px 0;padding:8px;background:#f7f7f7;border-radius:8px;white-space:pre-line');
       const go = el('button', 'padding:8px 14px;border-radius:8px;border:0;background:#1f7a3a;color:#fff;font-weight:700;cursor:pointer', '나이스 화면에 채우기');
       body.append(row, over, summary, stickyBar(go));
@@ -786,10 +811,12 @@
           return;
         }
         summary.style.color = '';
-        cur = planText(rows, sources[si].map, box.checked);
+        cur = planText(rows, sources[si].map, mode);
         const st = cur.stats;
+        over.style.display = st.hasOther ? '' : 'none';
         const longest = Math.max(0, ...cur.changes.map((c) => c.text.length));
         const lines = [`채울 학생 ${st.fill}명`, `이미 같은 글 ${st.same}명`];
+        if (st.append) lines.push(`기존 글 뒤에 이어 쓸 학생 ${st.append}명`);
         if (st.keep) lines.push(`이미 다른 글이 있어 그대로 둘 학생 ${st.keep}명`);
         if (st.noText) lines.push(`애플망고에 글이 없는 학생 ${st.noText}명`);
         if (longest) lines.push(`가장 긴 글 ${longest}자`);
@@ -800,7 +827,6 @@
         go.style.opacity = go.disabled ? 0.5 : 1;
       };
       sel.onchange = () => { si = Number(sel.value); update(); };
-      box.onchange = update;
       go.onclick = () => {
         if (!cur || !cur.changes.length) return;
         // 창을 연 뒤 나이스 화면이 바뀌었으면(교과 변경·조회) 줄 위치가 달라졌으니 다시 읽는다
