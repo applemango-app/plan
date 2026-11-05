@@ -1131,18 +1131,17 @@
       const md = (d) => `${Number(d.slice(4, 6))}월 ${Number(d.slice(6, 8))}일`;
       const cont = el('button', btnStyle('#1f7a3a') + ';display:none', '계속 (다음 학생부터)');
       body.insertBefore(cont, confirmBox);
-      let addedAll = 0, checkedAll = 0;
-      const cancelledNos = [], savedNos = [];
+      let addedAll = 0;
+      const cancelledNos = [];
 
       async function runAll() {
         running = true; stopReq = false; cont.style.display = 'none'; drawList();
         while (idx < todo.length) {
-          if (stopReq) { say(`멈췄어요. ${checkedAll}명을 확인했고, 그중 ${savedNos.length}명에게 새 기록 ${addedAll}건을 넣고 저장했어요.`); break; }
+          if (stopReq) { say(`멈췄어요. 여기까지 저장했어요. (${idx}/${todo.length}명)`); break; }
           const n = todo[idx];
           say(`${n}번 진행 중… (${idx + 1}/${todo.length}명)`);
           const r = await fillStudent(n);
           if (r.err) { say('⚠ ' + r.err + '. 여기서 멈췄어요.', true); break; }
-          checkedAll++;
           if (r.added) {
             const att = atteDates(n);
             const hit = [...new Set(r.addedDates.filter((d) => att.has(d)))].map(md);
@@ -1181,18 +1180,12 @@ ${sv.err}
             }
             status.set(n, `저장됨 ✓ ${r.added}건${r.skipped ? ` (이미 있음 ${r.skipped}건)` : ''}${sv.asked ? ' · 확인 후 저장' : ''}`);
             addedAll += r.added;
-            savedNos.push(n);
           } else status.set(n, `모두 이미 있음 (${r.skipped}건)`);
           idx++;
           drawList();
         }
         running = false;
-        // 몇 명을 '확인'했고 몇 명에게 실제로 새 기록을 넣어 저장했는지 나눠 알린다
-        if (idx >= todo.length) say((addedAll
-          ? `✔ 끝났어요. ${checkedAll}명을 확인해 ${savedNos.length}명에게 새 기록 ${addedAll}건을 넣고 저장했어요.`
-          : `✔ 끝났어요. ${checkedAll}명을 확인했는데 새로 넣을 기록이 없었어요.`) +
-          (checkedAll - savedNos.length - cancelledNos.length > 0 && addedAll ? `
-나머지 ${checkedAll - savedNos.length - cancelledNos.length}명은 기록이 이미 나이스에 있어 그대로 두었어요.` : '') +
+        if (idx >= todo.length) say(`✔ 끝났어요. 학생 ${todo.length}명, 새 기록 ${addedAll}건을 저장했어요.` +
           (cancelledNos.length ? `
 ⚠ [취소]해서 저장하지 않은 학생: ${cancelledNos.map((x) => x + '번').join(', ')} — 날짜를 고쳐 따로 넣어 주세요.` : ''), cancelledNos.length > 0);
         drawList();
