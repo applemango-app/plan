@@ -17,8 +17,8 @@
   // 인터넷이 될 때만: 버튼 안의 판이 없거나 오래됐으면 다시 설치를 권한다(인터넷이 막힌 곳에서도 최신 기능을 쓰게).
   const STALE = !OFFLINE && (!LOADER || !LOADER.embedded || daysSince(LOADER.embedded) > STALE_DAYS);
   const INSTALL_PAGE = 'https://applemango-app.github.io/plan/nf86ewh3xk/';
-  // 애플망고 웹앱 주소. 정식 주소(도메인)가 정해지면 바꾼다. 지금은 선생님 PC에서 띄운 웹앱.
-  const WEB_APP = 'http://localhost:8765';
+  // 애플망고 웹앱 주소 (회사 도메인, Cloudflare). 중계 창은 .html 없는 주소로 열어 넘겨주기를 한 번 줄인다.
+  const WEB_APP = 'https://applemango.app';
 
   // ---------- xlsx 읽기 (외부 라이브러리 없이: zip 목차 → deflate 풀기 → XML) ----------
   async function unzip(buf) {
@@ -610,7 +610,7 @@
   const WEB_ORIGIN = new URL(WEB_APP).origin;
   function fromWebApp(kind, subject) {
     return new Promise((resolve, reject) => {
-      const url = WEB_APP + '/neis-bridge.html?kind=' + encodeURIComponent(kind) + (subject ? '&subject=' + encodeURIComponent(subject) : '');
+      const url = WEB_APP + '/neis-bridge?kind=' + encodeURIComponent(kind) + (subject ? '&subject=' + encodeURIComponent(subject) : '');
       let w = null;
       try { w = window.open(url, 'applemango_neis_bridge', 'width=560,height=680'); } catch (_) {}
       if (!w) return reject(Error('팝업이 막혔어요. 주소창 오른쪽에서 이 사이트의 팝업을 허용해 주세요.'));
